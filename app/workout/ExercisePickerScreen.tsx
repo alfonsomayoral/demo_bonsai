@@ -11,8 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ArrowLeft, Search } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
-import { useExerciseStore } from '@/app/store/exerciseStore';
-import { useWorkoutStore } from '@/app/store/workoutStore';
+import { useExerciseStore } from '@/app/_store/exerciseStore';
+import { useWorkoutStore } from '@/app/_store/workoutStore';
 import { Exercise } from '@/lib/supabase';
 
 export default function ExercisePickerScreen() {

@@ -10,8 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, CreditCard as Edit } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
-import { useRoutineStore } from '@/app/store/routineStore';
-import { useWorkoutStore } from '@/app/store/workoutStore';
+import { useRoutineStore } from '@/app/_store/routineStore';
+import { useWorkoutStore } from '@/app/_store/workoutStore';
 
 export default function RoutineDetailScreen() {
   const { routineId } = useLocalSearchParams<{ routineId: string }>();

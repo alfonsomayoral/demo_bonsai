@@ -14,8 +14,8 @@
     import { Card } from '@/components/ui/Card';
     import { RoutineCarouselCard } from '@/components/workout/RoutineCarouselCard';
     import { MuscleAvatar } from '@/components/workout/MuscleAvatar';
-    import { useWorkoutStore } from '@/app/store/workoutStore';
-    import { useRoutineStore } from '@/app/store/routineStore';
+    import { useWorkoutStore } from '@/app/_store/workoutStore';
+    import { useRoutineStore } from '@/app/_store/routineStore';
     import { formatDuration } from '@/utils/timeUtils';
 
     export default function WorkoutTab() {

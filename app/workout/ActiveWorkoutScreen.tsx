@@ -13,7 +13,7 @@ import { ArrowLeft, Plus } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { TimerCard } from '@/components/workout/TimerCard';
 import { ActiveExerciseCard } from '@/components/workout/ActiveExerciseCard';
-import { useWorkoutStore } from '@/app/store/workoutStore';
+import { useWorkoutStore } from '@/app/_store/workoutStore';
 import { SessionExercise } from '@/lib/supabase';
 
 export default function ActiveWorkoutScreen() {

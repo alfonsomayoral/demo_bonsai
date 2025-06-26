@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Exercise } from '@/lib/supabase';
-import { useWorkoutStore } from '@/app/store/workoutStore';
+import { useWorkoutStore } from '@/app/_store/workoutStore';
 import { router } from 'expo-router';
 
 interface ExerciseInfoModalProps {

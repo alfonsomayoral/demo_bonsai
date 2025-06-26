@@ -13,7 +13,7 @@ import { router } from 'expo-router';
 import { ArrowLeft, Check, Plus } from 'lucide-react-native';
 
 import { Card } from '@/components/ui/Card';
-import { useRoutineStore } from '@/app/store/routineStore';
+import { useRoutineStore } from '@/app/_store/routineStore';
 
 const ROUTINE_COLORS = [
   '#007AFF',

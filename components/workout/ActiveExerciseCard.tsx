@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Card } from '@/components/ui/Card';
 import { SessionExercise } from '@/lib/supabase';
-import { useSetStore } from '@/app/store/setStore';
+import { useSetStore } from '@/app/_store/setStore';
 
 interface Props {
   exercise: SessionExercise;

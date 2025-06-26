@@ -14,8 +14,8 @@ import { ArrowLeft, Filter, Search } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { ExerciseInfoModal } from '@/components/workout/ExerciseInfoModal';
 import { FilterBottomSheet } from '@/components/workout/FilterBottomSheet';
-import { useExerciseStore } from '@/app/store/exerciseStore';
-import { useWorkoutStore } from '@/app/store/workoutStore';
+import { useExerciseStore } from '@/app/_store/exerciseStore';
+import { useWorkoutStore } from '@/app/_store/workoutStore';
 import { Exercise } from '@/lib/supabase';
 
 export default function ExerciseSearchScreen() {

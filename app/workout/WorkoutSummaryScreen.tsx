@@ -11,7 +11,7 @@ import { router } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { WorkoutSummaryCard } from '@/components/workout/WorkoutSummaryCard';
-import { useWorkoutStore } from '@/app/store/workoutStore';
+import { useWorkoutStore } from '@/app/_store/workoutStore';
 import { formatDuration } from '@/utils/timeUtils';
 import { Exercise, ExerciseSet } from '@/lib/supabase';
 

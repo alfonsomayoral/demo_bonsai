@@ -13,8 +13,8 @@ import { Card } from '@/components/ui/Card';
 import { ComparisonCard } from '@/components/workout/ComparisonCard';
 import { SetCard } from '@/components/workout/SetCard';
 import { SetPad } from '@/components/workout/SetPad';
-import { useSetStore } from '@/app/store/setStore';
-import { useExerciseStore } from '@/app/store/exerciseStore';
+import { useSetStore } from '@/app/_store/setStore';
+import { useExerciseStore } from '@/app/_store/exerciseStore';
 import { ExerciseSet } from '@/lib/supabase';
 
 export default function ExerciseSessionScreen() {

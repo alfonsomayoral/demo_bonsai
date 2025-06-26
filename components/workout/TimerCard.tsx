@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Pause, Play, Square } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
-import { useWorkoutStore } from '@/app/store/workoutStore';
+import { useWorkoutStore } from '@/app/_store/workoutStore';
 import { formatDuration } from '@/utils/timeUtils';
 
 interface TimerCardProps {
