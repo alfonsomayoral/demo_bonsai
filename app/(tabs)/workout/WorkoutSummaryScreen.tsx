@@ -11,9 +11,10 @@ import { router } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { WorkoutSummaryCard } from '@/components/workout/WorkoutSummaryCard';
-import { useWorkoutStore } from '@/app/_store/workoutStore';
+import { useWorkoutStore } from '@/store/workoutStore';
 import { formatDuration } from '@/utils/timeUtils';
 import { Exercise, ExerciseSet } from '@/lib/supabase';
+import colors from '@/theme/colors';
 
 export default function WorkoutSummaryScreen() {
   const { workout, workoutSummary } = useWorkoutStore();
@@ -91,7 +92,7 @@ export default function WorkoutSummaryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -103,7 +104,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#000000',
+    color: colors.text,
   },
   content: {
     paddingHorizontal: 20,
@@ -124,12 +125,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#000000',
+    color: colors.text,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: colors.textSecondary,
   },
   section: {
     marginBottom: 24,
@@ -137,7 +138,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.text,
     marginBottom: 16,
   },
 });

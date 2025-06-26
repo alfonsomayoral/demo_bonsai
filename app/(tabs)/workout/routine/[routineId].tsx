@@ -10,8 +10,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, CreditCard as Edit } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
-import { useRoutineStore } from '@/app/_store/routineStore';
-import { useWorkoutStore } from '@/app/_store/workoutStore';
+import { useRoutineStore } from '@/store/routineStore';
+import { useWorkoutStore } from '@/store/workoutStore';
+import colors from '@/theme/colors';
 
 export default function RoutineDetailScreen() {
   const { routineId } = useLocalSearchParams<{ routineId: string }>();
@@ -87,7 +88,7 @@ export default function RoutineDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -99,7 +100,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.text,
   },
   content: {
     flex: 1,
@@ -108,20 +109,21 @@ const styles = StyleSheet.create({
   routineCard: {
     marginBottom: 24,
     padding: 20,
+    backgroundColor: colors.card,
   },
   routineName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#000000',
+    color: colors.text,
     marginBottom: 8,
   },
   routineDescription: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: colors.textSecondary,
     lineHeight: 22,
   },
   startButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -130,12 +132,12 @@ const styles = StyleSheet.create({
   startButtonText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.text,
   },
   addExerciseButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
     justifyContent: 'center',
@@ -144,6 +146,6 @@ const styles = StyleSheet.create({
   addExerciseText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
+    color: colors.primary,
   },
 });

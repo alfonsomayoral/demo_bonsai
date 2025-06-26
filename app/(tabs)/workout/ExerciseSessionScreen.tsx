@@ -9,35 +9,28 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus } from 'lucide-react-native';
-
 import { Card } from '@/components/ui/Card';
 import { ComparisonCard } from '@/components/workout/ComparisonCard';
 import { SetCard } from '@/components/workout/SetCard';
 import { SetPad } from '@/components/workout/SetPad';
-
-import { useSetStore } from '@/app/_store/setStore';
-import { useExerciseStore } from '@/app/_store/exerciseStore';
+import { useSetStore } from '@/store/setStore';
+import { useExerciseStore } from '@/store/exerciseStore';
 import { ExerciseSet } from '@/lib/supabase';
+import colors from '@/theme/colors';
 
-export default function ExerciseDetailScreen() {
-  /** en realidad recibimos el ID de session_exercises */
+export default function ExerciseSessionScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
-
   const [showSetPad, setShowSetPad] = useState(false);
-
-  const {
-    sets,
-    loadSetsForExercise,
-    addSet,
-    duplicateSet,
-  } = useSetStore();
-
+  
+  const { sets, loadSetsForExercise, addSet, duplicateSet } = useSetStore();
   const { getExerciseById } = useExerciseStore();
-  const exercise = getExerciseById(exerciseId!); // puede ser null offline
+  
+  const exercise = getExerciseById(exerciseId!);
 
-  /* carga de sets */
   useEffect(() => {
-    if (exerciseId) loadSetsForExercise(exerciseId);
+    if (exerciseId) {
+      loadSetsForExercise(exerciseId);
+    }
   }, [exerciseId]);
 
   const handleAddSet = (reps: number, weight: number) => {
@@ -45,15 +38,11 @@ export default function ExerciseDetailScreen() {
     setShowSetPad(false);
   };
 
-  const handleDuplicateSet = (set: ExerciseSet) => duplicateSet(set.id);
+  const handleDuplicateSet = (set: ExerciseSet) => {
+    duplicateSet(set.id);
+  };
 
-  const renderSetItem = ({
-    item,
-    index,
-  }: {
-    item: ExerciseSet;
-    index: number;
-  }) => (
+  const renderSetItem = ({ item, index }: { item: ExerciseSet; index: number }) => (
     <SetCard
       set={item}
       setNumber={index + 1}
@@ -86,12 +75,17 @@ export default function ExerciseDetailScreen() {
         renderItem={renderSetItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
-        ListHeaderComponent={<ComparisonCard exerciseId={exerciseId!} />}
+        ListHeaderComponent={
+          <ComparisonCard exerciseId={exerciseId!} />
+        }
         showsVerticalScrollIndicator={false}
       />
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setShowSetPad(true)}>
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setShowSetPad(true)}
+      >
         <Plus color="#FFFFFF" size={24} />
       </TouchableOpacity>
 
@@ -106,7 +100,10 @@ export default function ExerciseDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -114,18 +111,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 18, fontWeight: '600', color: '#000' },
-  list: { paddingHorizontal: 20, paddingBottom: 100 },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  list: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+  },
   fab: {
     position: 'absolute',
     bottom: 30,
     right: 20,
-    backgroundColor: '#007AFF', // cámbialo a tu color primario
+    backgroundColor: colors.primary,
     width: 56,
     height: 56,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
     elevation: 8,
   },
 });

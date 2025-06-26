@@ -13,8 +13,9 @@ import { ArrowLeft, Plus } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { TimerCard } from '@/components/workout/TimerCard';
 import { ActiveExerciseCard } from '@/components/workout/ActiveExerciseCard';
-import { useWorkoutStore } from '@/app/_store/workoutStore';
+import { useWorkoutStore } from '@/store/workoutStore';
 import { SessionExercise } from '@/lib/supabase';
+import colors from '@/theme/colors';
 
 export default function ActiveWorkoutScreen() {
   const { 
@@ -37,7 +38,7 @@ export default function ActiveWorkoutScreen() {
           style: 'destructive',
           onPress: () => {
             finishWorkout();
-            router.push('../WorkoutSummaryScreen');
+            router.push('/workout/WorkoutSummaryScreen');
           },
         },
       ]
@@ -45,11 +46,11 @@ export default function ActiveWorkoutScreen() {
   };
 
   const handleAddExercise = () => {
-    router.push('../ExercisePickerScreen');
+    router.push('/workout/ExercisePickerScreen');
   };
 
   const handleExercisePress = (exercise:  SessionExercise ) => {
-    router.push(`../exercise/${exercise.id}`);
+    router.push(`/workout/exercise/${exercise.id}`);
   };
 
   const renderExerciseItem = ({ item }: { item: SessionExercise }) => (
@@ -118,7 +119,7 @@ export default function ActiveWorkoutScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -130,14 +131,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.text,
   },
   list: {
     paddingHorizontal: 20,
     paddingBottom: 120,
   },
   addExerciseCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 40,
     alignItems: 'center',
@@ -146,18 +147,18 @@ const styles = StyleSheet.create({
   addExerciseText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#007AFF',
+    color: colors.primary,
     marginTop: 16,
   },
   addExerciseSubtext: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -167,6 +168,6 @@ const styles = StyleSheet.create({
   addButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
+    color: colors.primary,
   },
 });

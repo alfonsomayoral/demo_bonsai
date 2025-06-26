@@ -3,39 +3,35 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   FlatList,
   TouchableOpacity,
-  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Filter, Search } from 'lucide-react-native';
+import { ArrowLeft, Search } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
-import { ExerciseInfoModal } from '@/components/workout/ExerciseInfoModal';
-import { FilterBottomSheet } from '@/components/workout/FilterBottomSheet';
-import { useExerciseStore } from '@/app/_store/exerciseStore';
-import { useWorkoutStore } from '@/app/_store/workoutStore';
+import { useExerciseStore } from '@/store/exerciseStore';
+import { useWorkoutStore } from '@/store/workoutStore';
 import { Exercise } from '@/lib/supabase';
+import colors from '@/theme/colors';
 
-export default function ExerciseSearchScreen() {
+export default function ExercisePickerScreen() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedMuscles, setSelectedMuscles] = useState<string[]>([]); 
   const { exercises, searchExercises, loading } = useExerciseStore();
-  const { workout } = useWorkoutStore();
+  const { addExerciseToWorkout } = useWorkoutStore();
 
   useEffect(() => {
-    searchExercises(searchQuery, selectedMuscles);
-  }, [searchQuery, selectedMuscles]);
+    searchExercises(searchQuery, []);
+  }, [searchQuery]);
 
-  const handleExercisePress = (exercise: Exercise) => {
-    setSelectedExercise(exercise);
+  const handleExerciseSelect = async (exercise: Exercise) => {
+    await addExerciseToWorkout(exercise.id);
+    router.back();
   };
 
   const renderExerciseItem = ({ item }: { item: Exercise }) => (
-    <TouchableOpacity onPress={() => handleExercisePress(item)}>
+    <TouchableOpacity onPress={() => handleExerciseSelect(item)}>
       <Card style={styles.exerciseCard}>
         <View style={styles.exerciseInfo}>
           <Text style={styles.exerciseName}>{item.name}</Text>
@@ -66,10 +62,8 @@ export default function ExerciseSearchScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <ArrowLeft color="#007AFF" size={24} />
         </TouchableOpacity>
-        <Text style={styles.title}>Exercise Search</Text>
-        <TouchableOpacity onPress={() => setShowFilters(true)}>
-          <Filter color="#007AFF" size={24} />
-        </TouchableOpacity>
+        <Text style={styles.title}>Add Exercise</Text>
+        <View style={{ width: 24 }} />
       </View>
 
       {/* Search Bar */}
@@ -94,22 +88,6 @@ export default function ExerciseSearchScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       />
-
-      {/* Exercise Info Modal */}
-      <ExerciseInfoModal
-        exercise={selectedExercise}
-        visible={!!selectedExercise}
-        onClose={() => setSelectedExercise(null)}
-        canStart={!!workout}
-      />
-
-      {/* Filter Bottom Sheet */}
-      <FilterBottomSheet
-        visible={showFilters}
-        onClose={() => setShowFilters(false)}
-        selectedMuscles={selectedMuscles}
-        onMusclesChange={setSelectedMuscles}
-      />
     </SafeAreaView>
   );
 }
@@ -117,7 +95,7 @@ export default function ExerciseSearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -129,7 +107,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.text,
   },
   searchContainer: {
     paddingHorizontal: 20,
@@ -138,7 +116,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -147,7 +125,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#000000',
+    color: colors.text,
   },
   list: {
     paddingHorizontal: 20,
@@ -166,17 +144,17 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.text,
     marginBottom: 4,
   },
   exerciseMuscle: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: colors.textSecondary,
   },
   difficultyContainer: {
     paddingHorizontal: 12,
     paddingVertical: 4,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.background,
     borderRadius: 12,
   },
   difficulty: {

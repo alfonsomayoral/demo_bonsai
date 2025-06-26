@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,12 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Check, Trash } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { ArrowLeft, Check } from 'lucide-react-native';
 
 import { Card } from '@/components/ui/Card';
-import { useRoutineStore } from '@/app/_store/routineStore';
+import { useRoutineStore } from '@/store/routineStore';
+import colors from '@/theme/colors';
 
 const ROUTINE_COLORS = [
   '#007AFF',
@@ -25,67 +26,29 @@ const ROUTINE_COLORS = [
   '#FFCC00',
 ];
 
-export default function EditRoutineScreen() {
-  /* params */
-  const { routineId } = useLocalSearchParams<{ routineId: string }>();
+export default function CreateRoutineScreen() {
+  const [name, setName] = useState('');
+  const [selectedColor, setSelectedColor] = useState(ROUTINE_COLORS[0]);
 
-  /* stores */
-  const {
-    getRoutineById,
-    updateRoutine,
-    deleteRoutine,
-  } = useRoutineStore();
+  const { addRoutine } = useRoutineStore();
 
-  /* initial data */
-  const routine = getRoutineById(routineId!);
-
-  /* local state */
-  const [name, setName] = useState(routine?.name ?? '');
-  const [selectedColor, setSelectedColor] = useState(
-    routine?.color ?? ROUTINE_COLORS[0],
-  );
-
-  /* guard */
-  useEffect(() => {
-    if (!routine) {
-      Alert.alert('Error', 'Routine not found', [{ onPress: () => router.back() }]);
-    }
-  }, [routine]);
-
-  /*───────────────────── handlers ─────────────────────*/
+  /* ───────────── handlers ───────────── */
   const handleSave = async () => {
-    if (!name.trim()) {
+    const trimmed = name.trim();
+    if (!trimmed) {
       Alert.alert('Error', 'Please enter a routine name');
       return;
     }
+
     try {
-      await updateRoutine(routineId!, name.trim(), selectedColor);
-      router.back();
-    } catch (e) {
-      Alert.alert('Error', 'Could not save routine.');
-      console.error(e);
+      await addRoutine(trimmed, selectedColor);
+      router.back(); // vuelve al carrusel
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not create routine.');
+      console.error('[CreateRoutine]', e);
     }
   };
 
-  const handleDelete = () =>
-    Alert.alert('Delete Routine', 'This cannot be undone. Continue?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteRoutine(routineId!);
-            router.back();
-          } catch (e) {
-            Alert.alert('Error', 'Could not delete routine.');
-            console.error(e);
-          }
-        },
-      },
-    ]);
-
-  /*────────────────────── UI ──────────────────────────*/
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -93,7 +56,7 @@ export default function EditRoutineScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <ArrowLeft color="#007AFF" size={24} />
         </TouchableOpacity>
-        <Text style={styles.title}>Edit Routine</Text>
+        <Text style={styles.title}>New Routine</Text>
         <TouchableOpacity onPress={handleSave}>
           <Check color="#007AFF" size={24} />
         </TouchableOpacity>
@@ -108,6 +71,7 @@ export default function EditRoutineScreen() {
             value={name}
             onChangeText={setName}
             placeholder="Enter routine name"
+            autoFocus
           />
 
           <Text style={styles.label}>Color</Text>
@@ -131,18 +95,13 @@ export default function EditRoutineScreen() {
         <Card style={[styles.previewCard, { backgroundColor: selectedColor }]}>
           <Text style={styles.previewText}>{name || 'Routine Preview'}</Text>
         </Card>
-
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-          <Trash color="#FFFFFF" size={20} />
-          <Text style={styles.deleteText}>Delete Routine</Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -150,24 +109,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 18, fontWeight: '600', color: '#000' },
+  title: { fontSize: 18, fontWeight: '600', color: colors.text },
   content: { flex: 1, paddingHorizontal: 20 },
-  formCard: { marginBottom: 20, padding: 20 },
+  formCard: { marginBottom: 20, padding: 20, backgroundColor: colors.card },
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
+    color: colors.text,
     marginBottom: 8,
     marginTop: 16,
   },
   input: {
     fontSize: 16,
-    color: '#000',
+    color: colors.text,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: colors.border,
     paddingVertical: 8,
+    backgroundColor: 'transparent',
   },
-  colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
+  colorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
   colorOption: {
     width: 44,
     height: 44,
@@ -177,7 +142,7 @@ const styles = StyleSheet.create({
   },
   selectedColor: {
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: colors.card,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -188,17 +153,7 @@ const styles = StyleSheet.create({
     height: 120,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
+    backgroundColor: colors.card,
   },
-  previewText: { fontSize: 18, fontWeight: '600', color: '#FFFFFF' },
-  deleteButton: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#FF3B30',
-    padding: 16,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deleteText: { color: '#FFFFFF', fontWeight: '600', fontSize: 16 },
+  previewText: { fontSize: 18, fontWeight: '600', color: colors.text },
 });

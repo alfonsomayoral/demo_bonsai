@@ -17,7 +17,7 @@ interface RoutineState {
   getRoutineById: (id: string) => Routine | undefined;
 
   /* Mutations */
-  addRoutine: (name: string, color: string) => Promise<string>;              // devuelve id
+  addRoutine: (name: string, color: string) => Promise<string>;          // devuelve id
   updateRoutine: (id: string, name: string, color: string) => Promise<void>;
   deleteRoutine: (id: string) => Promise<void>;
 }
@@ -28,12 +28,15 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
 
   /*─────────────────── Fetch todas las rutinas ───────────────────*/
   async loadRoutines() {
+    /* OFFLINE */
     if (!isSupabaseConfigured()) {
       set({ routines: mockRoutines, loading: false });
       return;
     }
 
     set({ loading: true });
+
+    /* ⇒ RLS ya limita por user_id, no hace falta filtrar */
     const { data, error } = await supabase
       .from('routines')
       .select('*')
@@ -55,7 +58,7 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
 
   /*─────────────────── Add ─────────────────────────*/
   async addRoutine(name, color) {
-    /* Modo OFFLINE -> añade a mock */
+    /* Modo OFFLINE → mock local */
     if (!isSupabaseConfigured()) {
       const newRoutine: Routine = {
         id: crypto.randomUUID(),
@@ -70,11 +73,21 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
       return newRoutine.id;
     }
 
+    /* 1. Obtener UID */
+    const { data: userData, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !userData?.user) throw new Error('Not logged in');
+
+    /* 2. Insert con user_id para cumplir RLS */
     const { data, error } = await supabase
       .from('routines')
-      .insert({ name, color })
+      .insert({
+        user_id: userData.user.id,
+        name,
+        color,
+      })
       .select()
       .single();
+
     if (error) throw error;
 
     set({ routines: [...get().routines, data as Routine] });
@@ -92,7 +105,7 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     }
     set({
       routines: get().routines.map((r) =>
-        r.id === id ? { ...r, name, color, updated_at: new Date().toISOString() } : r,
+        r.id === id ? { ...r, name, color, updated_at: new Date().toISOString() } : r
       ),
     });
   },
