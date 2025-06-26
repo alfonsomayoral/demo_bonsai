@@ -3,11 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
 export type Database = {
   public: {
     Tables: {
+      /*────────────────────────────── users ───────────────────────────────*/
       users: {
         Row: {
           id: string;
@@ -55,6 +54,8 @@ export type Database = {
           age?: number | null;
         };
       };
+
+      /*────────────────────────────── meals ───────────────────────────────*/
       meals: {
         Row: {
           id: string;
@@ -87,6 +88,8 @@ export type Database = {
           total_fat?: number;
         };
       };
+
+      /*──────────────────────────── meal_items ────────────────────────────*/
       meal_items: {
         Row: {
           id: string;
@@ -125,26 +128,39 @@ export type Database = {
           image_path?: string | null;
         };
       };
+
+      /*──────────────────────────── exercises ─────────────────────────────*/
       exercises: {
         Row: {
           id: string;
           user_id: string | null;
           name: string;
           muscle_group: string;
+          description: string | null;                          /* NUEVO */
+          image_url: string | null;                            /* NUEVO */
+          difficulty: 'beginner' | 'intermediate' | 'advanced' | null; /* NUEVO */
         };
         Insert: {
           id?: string;
           user_id?: string | null;
           name: string;
           muscle_group: string;
+          description?: string | null;
+          image_url?: string | null;
+          difficulty?: 'beginner' | 'intermediate' | 'advanced' | null;
         };
         Update: {
           id?: string;
           user_id?: string | null;
           name?: string;
           muscle_group?: string;
+          description?: string | null;
+          image_url?: string | null;
+          difficulty?: 'beginner' | 'intermediate' | 'advanced' | null;
         };
       };
+
+      /*────────────────────────── workout_sessions ────────────────────────*/
       workout_sessions: {
         Row: {
           id: string;
@@ -168,26 +184,36 @@ export type Database = {
           total_volume?: number;
         };
       };
+
+      /*────────────────────────── session_exercises ───────────────────────*/
       session_exercises: {
         Row: {
           id: string;
           session_id: string;
           exercise_id: string;
           order_idx: number;
+          name: string | null;             /* NUEVO */
+          muscle_group: string | null;     /* NUEVO */
         };
         Insert: {
           id?: string;
           session_id: string;
           exercise_id: string;
           order_idx: number;
+          name?: string | null;
+          muscle_group?: string | null;
         };
         Update: {
           id?: string;
           session_id?: string;
           exercise_id?: string;
           order_idx?: number;
+          name?: string | null;
+          muscle_group?: string | null;
         };
       };
+
+      /*──────────────────────────── exercise_sets ─────────────────────────*/
       exercise_sets: {
         Row: {
           id: string;
@@ -195,7 +221,10 @@ export type Database = {
           weight: number;
           reps: number;
           rpe: number | null;
-          logged_at: string;
+          created_at: string;               /* <-- antes logged_at */
+          volume: number | null;            /* col. almacenada */
+          name?: string | null;             /* NUEVO opcional para resúmenes */
+          sets?: number | null;             /* NUEVO opcional para resúmenes */
         };
         Insert: {
           id?: string;
@@ -203,7 +232,10 @@ export type Database = {
           weight: number;
           reps: number;
           rpe?: number | null;
-          logged_at?: string;
+          created_at?: string;
+          volume?: number | null;
+          name?: string | null;
+          sets?: number | null;
         };
         Update: {
           id?: string;
@@ -211,9 +243,122 @@ export type Database = {
           weight?: number;
           reps?: number;
           rpe?: number | null;
-          logged_at?: string;
+          created_at?: string;
+          volume?: number | null;
+          name?: string | null;
+          sets?: number | null;
+        };
+      };
+
+      /*────────────────────────────── routines ────────────────────────────*/
+      routines: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          color: string;
+          created_at: string;
+          updated_at: string;
+          last_done: string | null;        /* NUEVO */
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          color?: string;
+          created_at?: string;
+          updated_at?: string;
+          last_done?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          color?: string;
+          created_at?: string;
+          updated_at?: string;
+          last_done?: string | null;
+        };
+      };
+
+      /*────────────────────────── routine_exercises ───────────────────────*/
+      routine_exercises: {
+        Row: {
+          id: string;
+          routine_id: string;
+          exercise_id: string;
+          order_idx: number;
+        };
+        Insert: {
+          id?: string;
+          routine_id: string;
+          exercise_id: string;
+          order_idx: number;
+        };
+        Update: {
+          id?: string;
+          routine_id?: string;
+          exercise_id?: string;
+          order_idx?: number;
         };
       };
     };
+
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 };
+
+// CLIENTE TIPADO
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+
+export const isSupabaseConfigured = (): boolean => Boolean(supabaseUrl && supabaseAnonKey);
+
+/*────────────────────── Shared interfaces basadas en Database ───────────*/
+export type Exercise = Database['public']['Tables']['exercises']['Row'];
+export type Routine = Database['public']['Tables']['routines']['Row'];
+export type ExerciseSet = Database['public']['Tables']['exercise_sets']['Row'];
+export type SessionExercise = Database['public']['Tables']['session_exercises']['Row'];
+export type WorkoutSession = Database['public']['Tables']['workout_sessions']['Row'];
+
+/**
+ * Datos mock para dev/offline
+ */
+export const mockExercises: Exercise[] = [
+  {
+    id: '0001',
+    user_id: null,
+    name: 'Push-Up',
+    muscle_group: 'chest',
+    description: 'Classic body-weight push movement.',
+    image_url: null,
+    difficulty: 'beginner',
+  },
+];
+
+export const mockRoutines: Routine[] = [
+  {
+    id: 'rt-1',
+    user_id: 'demo',
+    name: 'Push Day',
+    color: '#00E676',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    last_done: null,
+  },
+];
+
+export const mockWorkoutSession: WorkoutSession = {
+  id: 'ws-1',
+  user_id: 'demo',
+  start_time: new Date().toISOString(),
+  duration_sec: null,
+  total_volume: 0,
+};
+
+/* Aliases usados por algunos componentes */
+export type WorkoutExercise = SessionExercise;
+export type ExerciseSummary = ExerciseSet;
+export type Set = ExerciseSet;
