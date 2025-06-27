@@ -1,0 +1,41 @@
+name,muscle_group,difficulty,description,image_url
+Bench Press,Chest,intermediate,Press a barbell from the chest while lying on a flat bench.,null
+Incline Dumbbell Press,Chest,intermediate,Press two dumbbells upward on an incline bench to target upper chest.,null
+Push‑Up,Chest,beginner,Body‑weight press from the floor keeping torso rigid and elbows tucked.,null
+Chest Fly,Chest,beginner,Open and close the arms in a wide arc on a bench to isolate pectorals.,null
+Decline Bench Press,Chest,intermediate,Barbell press on a decline bench emphasizing lower chest fibres.,null
+Pull‑Up,Back,advanced,Pronated‑grip vertical pull hanging from a bar to engage lats.,null
+Bent‑Over Row,Back,intermediate,Row a barbell toward the torso with flat back and hinged hips.,null
+Lat Pulldown,Back,beginner,Pull a cable bar from overhead to chest level while seated.,null
+Seated Cable Row,Back,beginner,Row a narrow handle toward the abdomen while seated upright.,null
+Deadlift,Back,advanced,Lift a loaded barbell from floor to hip level with neutral spine.,null
+Overhead Press,Shoulders,intermediate,Press a barbell overhead from shoulder height standing tall.,null
+Lateral Raise,Shoulders,beginner,Raise dumbbells out to the sides to shoulder height for delts.,null
+Front Raise,Shoulders,beginner,Lift dumbbells forward to shoulder height targeting anterior delts.,null
+Arnold Press,Shoulders,advanced,Rotate dumbbells from front rack to overhead in a continuous press.,null
+Upright Row,Shoulders,intermediate,Pull a barbell vertically to upper chest with elbows high.,null
+Bicep Curl,Arms,beginner,"Flex elbows to lift a bar or dumbbells, isolating the biceps.",null
+Triceps Pushdown,Arms,beginner,Extend elbows downward on a cable to work the triceps.,null
+Hammer Curl,Arms,beginner,Curl dumbbells with neutral grip to emphasize brachialis.,null
+Skull Crusher,Arms,intermediate,Lie on bench and extend EZ‑bar from forehead to full elbow lockout.,null
+Dips,Arms,advanced,Lower and raise body on parallel bars focusing on triceps.,null
+Squat,Legs,intermediate,Barbell back squat descending until thighs parallel to floor.,null
+Leg Press,Legs,beginner,Push a sled upward with feet shoulder‑width apart.,null
+Lunges,Legs,beginner,Step forward and lower until both knees are at 90° angles.,null
+Romanian Deadlift,Legs,intermediate,Hinge at hips lowering bar to mid‑shin while keeping legs semi‑straight.,null
+Leg Extension,Legs,beginner,Extend knees on machine isolating quadriceps.,null
+Plank,Abs,beginner,Hold a straight‑body position on forearms and toes.,null
+Crunch,Abs,beginner,Curl torso toward knees from supine position.,null
+Hanging Leg Raise,Abs,intermediate,Raise legs to hip height while hanging from a bar.,null
+Russian Twist,Abs,beginner,Rotate torso side to side holding a weight while seated.,null
+Bicycle Crunch,Abs,beginner,Alternate elbow‑to‑knee crunches mimicking pedalling motion.,null
+Hip Thrust,Glutes,intermediate,Drive hips upward resting upper back on bench with barbell over hips.,null
+Glute Bridge,Glutes,beginner,Bridge hips off the floor squeezing glutes at top.,null
+Bulgarian Split Squat,Glutes,advanced,Split squat with back foot elevated to isolate front‑leg glutes.,null
+Kettlebell Swing,Glutes,intermediate,Hinge and snap hips to drive kettlebell to shoulder height.,null
+Cable Kickback,Glutes,beginner,Extend leg backward against cable resistance targeting glutes.,null
+Treadmill Run,Cardio,beginner,Continuous running on a treadmill at moderate speed.,null
+Rowing Machine,Cardio,beginner,Full‑body rower strokes at steady cadence for endurance.,null
+Cycling,Cardio,beginner,Pedal a stationary bike maintaining target heart rate.,null
+Jump Rope,Cardio,beginner,Continuous rope skips to improve coordination and cardio.,null
+Burpees,Cardio,intermediate,Squat‑thrust and jump combination performed at high pace.,null
