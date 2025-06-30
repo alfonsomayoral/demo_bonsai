@@ -22,7 +22,7 @@ export default function ExercisePickerScreen() {
   const { addExerciseToWorkout } = useWorkoutStore();
 
   useEffect(() => {
-    searchExercises(searchQuery, []);
+    searchExercises(searchQuery);
   }, [searchQuery]);
 
   const handleExerciseSelect = async (exercise: Exercise) => {

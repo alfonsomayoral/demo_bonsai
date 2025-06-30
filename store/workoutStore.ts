@@ -68,7 +68,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         .from('workout_sessions')
         .insert({
           user_id: uid,
-          started_at: new Date().toISOString(),
+          start_time: new Date().toISOString(),
           total_volume: 0,
         })
         .select()

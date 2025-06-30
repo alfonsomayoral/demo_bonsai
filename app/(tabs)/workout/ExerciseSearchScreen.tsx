@@ -1,187 +1,166 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   FlatList,
-  TouchableOpacity,
-  Modal,
+  Pressable,
+  ActivityIndicator,
+  StyleSheet,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Filter, Search } from 'lucide-react-native';
-import { Card } from '@/components/ui/Card';
-import { ExerciseInfoModal } from '@/components/workout/ExerciseInfoModal';
-import { FilterBottomSheet } from '@/components/workout/FilterBottomSheet';
+import { Search, ArrowLeft } from 'lucide-react-native';
+
 import { useExerciseStore } from '@/store/exerciseStore';
+import { useRoutineStore } from '@/store/routineStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { Exercise } from '@/lib/supabase';
 import colors from '@/theme/colors';
 
 export default function ExerciseSearchScreen() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedMuscles, setSelectedMuscles] = useState<string[]>([]); 
-  const { exercises, searchExercises, loading } = useExerciseStore();
-  const { workout } = useWorkoutStore();
+  const [query, setQuery] = useState('');
 
+  const {
+    exercises,
+    loading,
+    searchExercises,
+    addExerciseToRoutine,
+  } = useExerciseStore();
+  const { routines } = useRoutineStore();
+  const { workout, addExerciseToWorkout } = useWorkoutStore();
+
+  /* primera carga */
   useEffect(() => {
-    searchExercises(searchQuery, selectedMuscles);
-  }, [searchQuery, selectedMuscles]);
+    searchExercises('');
+  }, []);
 
-  const handleExercisePress = (exercise: Exercise) => {
-    setSelectedExercise(exercise);
+  /* debounce búsqueda */
+  useEffect(() => {
+    const id = setTimeout(() => searchExercises(query.trim()), 300);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  /*──────── handlers ────────*/
+  const goToExerciseDetail = (ex: Exercise) =>
+    router.push(`/workout/exercise/${ex.id}`);
+
+  const handleAddToRoutine = (ex: Exercise) => {
+    if (!routines.length) {
+      Alert.alert('No routines yet', 'Create a routine first.');
+      return;
+    }
+    Alert.alert(
+      'Add to routine',
+      `Choose a routine for "${ex.name}"`,
+      routines.map((rt) => ({
+        text: rt.name,
+        onPress: async () => {
+          try {
+            await addExerciseToRoutine(rt.id, ex.id);
+            Alert.alert('Added', `${ex.name} added to ${rt.name}`);
+          } catch (err) {
+            Alert.alert('Error', 'Could not add exercise.');
+          }
+        },
+      })),
+      { cancelable: true },
+    );
   };
 
-  const renderExerciseItem = ({ item }: { item: Exercise }) => (
-    <TouchableOpacity onPress={() => handleExercisePress(item)}>
-      <Card style={styles.exerciseCard}>
-        <View style={styles.exerciseInfo}>
-          <Text style={styles.exerciseName}>{item.name}</Text>
-          <Text style={styles.exerciseMuscle}>{item.muscle_group}</Text>
-        </View>
-        <View style={styles.difficultyContainer}>
-          <Text style={[styles.difficulty, { color: getDifficultyColor(item.difficulty) }]}>
-            {item.difficulty}
-          </Text>
-        </View>
-      </Card>
-    </TouchableOpacity>
+  /*──────── item ────────*/
+  const renderItem = ({ item }: { item: Exercise }) => (
+    <View style={styles.item}>
+      <Pressable onPress={() => goToExerciseDetail(item)} style={{ flex: 1 }}>
+        <Text style={styles.itemName}>{item.name}</Text>
+        <Text style={styles.itemMuscle}>{item.muscle_group}</Text>
+      </Pressable>
+
+      <Pressable onPress={() => handleAddToRoutine(item)} style={styles.addBtn}>
+        <Text style={styles.addBtnTxt}>Add to Routine</Text>
+      </Pressable>
+    </View>
   );
 
-  const getDifficultyColor = (difficulty?: string | null) => {
-    switch (difficulty?.toLowerCase()) {
-      case 'beginner': return '#34C759';
-      case 'intermediate': return '#FF9500';
-      case 'advanced': return '#FF3B30';
-      default: return '#8E8E93';
-    }
-  };
-
+  /*──────── render ────────*/
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft color="#007AFF" size={24} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Exercise Search</Text>
-        <TouchableOpacity onPress={() => setShowFilters(true)}>
-          <Filter color="#007AFF" size={24} />
-        </TouchableOpacity>
+        <Pressable onPress={() => router.back()}>
+          <ArrowLeft color={colors.primary} size={24} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Search Exercise</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
+      {/* search */}
+      <View style={styles.searchWrap}>
         <View style={styles.searchBar}>
-          <Search color="#8E8E93" size={20} />
+          <Search color="#8E8E93" size={18} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search exercises..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+            placeholder="Search exercises…"
+            placeholderTextColor={colors.textSecondary}
+            value={query}
+            onChangeText={setQuery}
             autoFocus
           />
         </View>
       </View>
 
-      {/* Exercise List */}
-      <FlatList
-        data={exercises}
-        renderItem={renderExerciseItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
-
-      {/* Exercise Info Modal */}
-      <ExerciseInfoModal
-        exercise={selectedExercise}
-        visible={!!selectedExercise}
-        onClose={() => setSelectedExercise(null)}
-        canStart={!!workout}
-      />
-
-      {/* Filter Bottom Sheet */}
-      <FilterBottomSheet
-        visible={showFilters}
-        onClose={() => setShowFilters(false)}
-        selectedMuscles={selectedMuscles}
-        onMusclesChange={setSelectedMuscles}
-      />
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} size="large" />
+      ) : (
+        <FlatList
+          data={exercises}
+          keyExtractor={(e) => e.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
+/*──────── styles ────────*/
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  searchContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  searchWrap: { paddingHorizontal: 20, marginBottom: 12 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
     borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text,
-  },
-  list: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  exerciseCard: {
+  searchInput: { flex: 1, marginLeft: 8, fontSize: 16, color: colors.text },
+  list: { paddingHorizontal: 20, paddingBottom: 20 },
+  item: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    padding: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingVertical: 12,
   },
-  exerciseInfo: {
-    flex: 1,
-  },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  exerciseMuscle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  difficultyContainer: {
+  itemName: { fontSize: 16, fontWeight: '600', color: colors.text },
+  itemMuscle: { fontSize: 13, fontStyle: 'italic', color: colors.textSecondary },
+  addBtn: {
+    backgroundColor: colors.success,
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: colors.background,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 12,
   },
-  difficulty: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  addBtnTxt: { color: '#fff', fontSize: 12, fontWeight: '600' },
 });

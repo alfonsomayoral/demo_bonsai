@@ -27,12 +27,12 @@ export default function WorkoutTab() {
   }, []);
 
   /* ───── Fab main ───── */
-  const handleFabPress = () => {
+  const handleFabPress = async () => {
     if (workout) {
-      router.push('/workout/ActiveWorkoutScreen');
+      router.push('./workout/ActiveWorkoutScreen');
     } else {
       createWorkout();
-      router.push('/workout/ActiveWorkoutScreen');
+      router.push('./workout/ActiveWorkoutScreen');
     }
   };
 
@@ -48,7 +48,7 @@ export default function WorkoutTab() {
         <View style={styles.searchContainer}>
           <TouchableOpacity
             style={styles.searchBar}
-            onPress={() => router.push('/workout/ExerciseSearchScreen')}
+            onPress={() => router.push('./workout/ExerciseSearchScreen')}
           >
             <Search color="#8E8E93" size={20} />
             <Text style={styles.searchPlaceholder}>Search exercises...</Text>
@@ -71,14 +71,14 @@ export default function WorkoutTab() {
                 key={routine.id}
                 routine={routine}
                 onPress={() =>
-                  router.push(`/workout/routine/${routine.id}`)
+                  router.push(`./workout/routine/${routine.id}`)
                 }
               />
             ))}
 
             <TouchableOpacity
               style={styles.addRoutineCard}
-              onPress={() => router.push('/workout/routine/create')}
+              onPress={() => router.push('./workout/routine/create')}
             >
               <Plus color={colors.primary} size={24} />
               <Text style={styles.addRoutineText}>Add Routine</Text>

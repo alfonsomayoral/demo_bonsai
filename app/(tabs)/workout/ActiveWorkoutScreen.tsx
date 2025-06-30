@@ -38,7 +38,7 @@ export default function ActiveWorkoutScreen() {
           style: 'destructive',
           onPress: () => {
             finishWorkout();
-            router.push('/workout/WorkoutSummaryScreen');
+            router.push('./workout/WorkoutSummaryScreen');
           },
         },
       ]
@@ -46,11 +46,11 @@ export default function ActiveWorkoutScreen() {
   };
 
   const handleAddExercise = () => {
-    router.push('/workout/ExercisePickerScreen');
+    router.push('./workout/ExercisePickerScreen');
   };
 
   const handleExercisePress = (exercise:  SessionExercise ) => {
-    router.push(`/workout/exercise/${exercise.id}`);
+    router.push(`./workout/exercise/${exercise.id}`);
   };
 
   const renderExerciseItem = ({ item }: { item: SessionExercise }) => (

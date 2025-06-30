@@ -1,151 +1,131 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
-  TouchableOpacity,
+  Pressable,
+  ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Plus, CreditCard as Edit } from 'lucide-react-native';
-import { Card } from '@/components/ui/Card';
-import { useRoutineStore } from '@/store/routineStore';
-import { useWorkoutStore } from '@/store/workoutStore';
+import { ArrowLeft } from 'lucide-react-native';
+
+import { supabase } from '@/lib/supabase';
+import { Exercise } from '@/lib/supabase';
 import colors from '@/theme/colors';
 
-export default function RoutineDetailScreen() {
+export default function RoutineScreen() {
   const { routineId } = useLocalSearchParams<{ routineId: string }>();
-  const { routines } = useRoutineStore();
-  const { createWorkout } = useWorkoutStore();
-  
-  const routine = routines.find(r => r.id === routineId);
 
-  const handleStartRoutine = async () => {
-    await createWorkout();
-    router.push('/workout/ActiveWorkoutScreen');
-  };
+  const [routineName, setRoutineName] = useState('');
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleEditRoutine = () => {
-    router.push(`./workout/routine/edit/${routineId}`);
-  };
+  /* fetch */
+  useEffect(() => {
+    (async () => {
+      /* nombre rutina */
+      const { data: routineData } = await supabase
+        .from('routines')
+        .select('name')
+        .eq('id', routineId)
+        .single();
+      if (routineData) setRoutineName(routineData.name);
 
-  if (!routine) {
+      /* ejercicios */
+      const { data: exRows } = await supabase
+        .from('routine_exercises')
+        .select('order_idx, exercise:exercises(*)')
+        .eq('routine_id', routineId)
+        .order('order_idx');
+
+      if (exRows) {
+        const parsed: Exercise[] = exRows.map(
+          (row: any) => row.exercise as Exercise,
+        );
+        setExercises(parsed);
+      }
+      setLoading(false);
+    })();
+  }, [routineId]);
+
+  const renderItem = ({ item }: { item: Exercise }) => (
+    <Pressable
+      style={styles.card}
+      onPress={() => router.push(`/workout/exercise/${item.id}`)}
+    >
+      <Text style={styles.cardTitle}>{item.name}</Text>
+      <Text style={styles.cardSubtitle}>{item.muscle_group}</Text>
+    </Pressable>
+  );
+
+  const handleAddExercise = () =>
+    router.push({ pathname: './workout/ExerciseSearch', params: { routineId } });
+
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <ArrowLeft color="#007AFF" size={24} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Routine Not Found</Text>
-          <View style={{ width: 24 }} />
-        </View>
+      <SafeAreaView style={styles.center}>
+        <ActivityIndicator size="large" />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft color="#007AFF" size={24} />
-        </TouchableOpacity>
-        <Text style={styles.title}>{routine.name}</Text>
-        <TouchableOpacity onPress={handleEditRoutine}>
-          <Edit color="#007AFF" size={24} />
-        </TouchableOpacity>
+        <Pressable onPress={() => router.back()}>
+          <ArrowLeft color={colors.primary} size={24} />
+        </Pressable>
+        <Text style={styles.headerTitle}>{routineName}</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      {/* Content */}
-      <View style={styles.content}>
-        <Card style={styles.routineCard}>
-          <Text style={styles.routineName}>{routine.name}</Text>
-          <Text style={styles.routineDescription}>
-            This routine contains exercises for a complete workout.
-          </Text>
-        </Card>
+      <FlatList
+        data={exercises}
+        keyExtractor={(e) => e.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+      />
 
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={handleStartRoutine}
-        >
-          <Text style={styles.startButtonText}>Start Routine</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.addExerciseButton}
-          onPress={() => router.push('/workout/ExerciseSearchScreen')}
-        >
-          <Plus color="#007AFF" size={20} />
-          <Text style={styles.addExerciseText}>Add Exercise</Text>
-        </TouchableOpacity>
-      </View>
+      <Pressable style={styles.addBtn} onPress={handleAddExercise}>
+        <Text style={styles.addBtnTxt}>Add Exercise</Text>
+      </Pressable>
     </SafeAreaView>
   );
 }
 
+/*──────── styles ────────*/
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
+  headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  list: { paddingHorizontal: 20, paddingBottom: 20 },
+  card: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingVertical: 14,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  routineCard: {
-    marginBottom: 24,
-    padding: 20,
-    backgroundColor: colors.card,
-  },
-  routineName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  routineDescription: {
-    fontSize: 16,
+  cardTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
+  cardSubtitle: {
+    fontSize: 13,
+    fontStyle: 'italic',
     color: colors.textSecondary,
-    lineHeight: 22,
   },
-  startButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
+  addBtn: {
+    backgroundColor: colors.success,
+    margin: 20,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 16,
   },
-  startButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  addExerciseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    justifyContent: 'center',
-    gap: 8,
-  },
-  addExerciseText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primary,
-  },
+  addBtnTxt: { color: '#fff', fontWeight: '600' },
 });
