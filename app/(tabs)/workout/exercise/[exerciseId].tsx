@@ -18,13 +18,8 @@ import { useWorkoutStore } from '@/store/workoutStore';
 import { Exercise } from '@/lib/supabase';
 import colors from '@/theme/colors';
 
-/* «mode» distingue INFO ↔ TRACK */
-type Mode = 'INFO' | 'TRACK';
-
-export default function ExerciseDetailScreen() {
-  const { exerciseId, mode: routeMode } =
-    useLocalSearchParams<{ exerciseId: string; mode?: Mode }>();
-  const mode: Mode = routeMode === 'TRACK' ? 'TRACK' : 'INFO';
+export default function ExerciseInfoScreen() {
+  const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
 
   const { getExerciseById, addExerciseToRoutine } = useExerciseStore();
   const { routines } = useRoutineStore();
@@ -33,7 +28,7 @@ export default function ExerciseDetailScreen() {
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [loading, setLoading] = useState(true);
 
-  /* carga ejercicio */
+  /* carga ejercicio (cache primero) */
   useEffect(() => {
     const local = getExerciseById(exerciseId);
     if (local) {
@@ -80,9 +75,10 @@ export default function ExerciseDetailScreen() {
       Alert.alert('Start a workout first');
       return;
     }
-    await addExerciseToWorkout(exerciseId);
-    /* Abre la pantalla de tracking (ya existente) */
-    router.push(`/workout/ExerciseSessionScreen?exerciseId=${exerciseId}`);
+    const sessId = await addExerciseToWorkout(exerciseId); // devuelve uuid
+    if (sessId) {
+      router.replace(`/workout/exercise/${sessId}`); // TRACK
+    }
   };
 
   /*──────── render ────────*/
@@ -94,7 +90,6 @@ export default function ExerciseDetailScreen() {
     );
   }
 
-  /* INFO mode */
   return (
     <SafeAreaView style={styles.container}>
       {/* header */}
@@ -106,7 +101,7 @@ export default function ExerciseDetailScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* details */}
+      {/* detalles */}
       <View style={styles.info}>
         <Text style={styles.label}>Muscle group</Text>
         <Text style={styles.value}>{exercise.muscle_group}</Text>
@@ -118,7 +113,7 @@ export default function ExerciseDetailScreen() {
         <Text style={styles.value}>{exercise.description ?? '—'}</Text>
       </View>
 
-      {/* buttons */}
+      {/* botones */}
       <View style={styles.btnRow}>
         <Pressable style={styles.btn} onPress={addToRoutine}>
           <Text style={styles.btnTxt}>Add to Routine</Text>

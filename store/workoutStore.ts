@@ -1,6 +1,4 @@
-/* filename: app/store/workoutStore.ts
-   Maneja el entrenamiento activo: cronómetro, ejercicios añadidos y resumen.
-*/
+/* Maneja el entrenamiento activo: cronómetro, ejercicios y resumen */
 import { create } from 'zustand';
 import {
   supabase,
@@ -11,37 +9,35 @@ import {
   ExerciseSet,
 } from '@/lib/supabase';
 
-/*───────────────────────────  Tipos auxiliares  ───────────────────────────*/
+/* ---------- Tipos auxiliares ---------- */
 interface WorkoutSummary {
-  duration: number;       // segundos
-  totalVolume: number;    // Σ volume de todos los sets
+  duration: number;      // segundos
+  totalVolume: number;   // Σ (reps·kg)
   totalSets: number;
   totalReps: number;
   exercises: ExerciseSet[];
 }
 
 interface WorkoutState {
-  /* Estado en curso */
+  /* Estado */
   workout: WorkoutSession | null;
   exercises: SessionExercise[];
   elapsedSec: number;
   running: boolean;
-
-  /* Resumen al finalizar */
   workoutSummary: WorkoutSummary | null;
 
   /* Acciones */
   createWorkout: (userId?: string) => Promise<void>;
-  addExerciseToWorkout: (exerciseId: string) => Promise<void>;
+  /** Devuelve el id de la fila `session_exercises` (o null si no hay sesión) */
+  addExerciseToWorkout: (exerciseId: string) => Promise<string | null>;
   pauseWorkout: () => void;
   resumeWorkout: () => void;
   finishWorkout: () => Promise<void>;
 }
 
-/* Cronómetro global (1 seg) */
 let timer: number | null = null;
 
-/*───────────────────────────  Store  ───────────────────────────*/
+/* ---------- STORE ---------- */
 export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   workout: null,
   exercises: [],
@@ -49,18 +45,17 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   running: false,
   workoutSummary: null,
 
-  /*─────────────────────── 1. Crear nuevo entrenamiento ──────────────────*/
+  /* 1. Crear sesión ---------------------------------------------------- */
   async createWorkout(userId) {
-    if (get().workout) return; // ya existe uno activo
+    if (get().workout) return;
 
-    /* uid explícito ► o bien sacarlo de auth */
     let uid = userId;
     if (!uid && isSupabaseConfigured()) {
       const { data } = await supabase.auth.getUser();
-      uid = data.user?.id ?? undefined;
+      uid = data.user?.id;
     }
 
-    /* modo OFFLINE */
+    /* Modo offline */
     if (!isSupabaseConfigured() || !uid) {
       set({ workout: mockWorkoutSession, running: true, elapsedSec: 0 });
     } else {
@@ -73,61 +68,58 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         })
         .select()
         .single();
-
       if (error) throw error;
+
       set({ workout: data as WorkoutSession, running: true, elapsedSec: 0 });
     }
 
-    /* arrancar cronómetro */
     timer = setInterval(
       () => set((s) => ({ elapsedSec: s.elapsedSec + 1 })),
       1_000,
     );
   },
 
-  /*─────────────────────── 2. Añadir ejercicio a la sesión ───────────────*/
+  /* 2. Añadir ejercicio a la sesión ----------------------------------- */
   async addExerciseToWorkout(exerciseId) {
     const { workout, exercises } = get();
-    if (!workout) return;
-
-    /* uid cuando estamos online */
-    let uid: string | null = null;
-    if (isSupabaseConfigured()) {
-      const { data } = await supabase.auth.getUser();
-      uid = data.user?.id ?? null;
-      if (!uid) {
-        console.warn('[workoutStore] addExercise: usuario no autenticado');
-        return;
-      }
-    }
-
-    const newEx: SessionExercise = {
-      id: crypto.randomUUID(),
+    if (!workout) return null;
+  
+    const baseRow = {
       session_id: workout.id,
       exercise_id: exerciseId,
-      user_id: uid ?? 'offline',
       order_idx: exercises.length,
-      created_at: new Date().toISOString(),
     };
-
-    /* ► OFFLINE: solo local */
+  
+    /* ---------- OFFLINE ---------- */
     if (!isSupabaseConfigured()) {
-      set({ exercises: [...exercises, newEx] });
-      return;
+      const row: SessionExercise = {
+        id: crypto.randomUUID(),
+        ...baseRow,
+        user_id: workout.user_id ?? 'offline',
+        created_at: new Date().toISOString(),
+      };
+      set({ exercises: [...exercises, row] });
+      return row.id;
     }
-
-    /* ► ONLINE: insertar en Supabase */
+  
+    /* ---------- ONLINE ----------- */
     const { data, error } = await supabase
       .from('session_exercises')
-      .insert(newEx)
+      .insert(baseRow)
       .select()
       .single();
-
     if (error) throw error;
-    set({ exercises: [...exercises, data as SessionExercise] });
+  
+    const row: SessionExercise = {
+      ...data,
+      user_id: workout.user_id,                // aseguramos la clave
+      created_at: new Date().toISOString(),
+    };
+    set({ exercises: [...exercises, row] });
+    return row.id;
   },
 
-  /*─────────────────────── 3. Control del cronómetro ─────────────────────*/
+  /* 3. Cronómetro ------------------------------------------------------ */
   pauseWorkout() {
     if (timer) clearInterval(timer);
     timer = null;
@@ -143,12 +135,11 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     set({ running: true });
   },
 
-  /*─────────────────────── 4. Finalizar entrenamiento ────────────────────*/
+  /* 4. Finalizar sesión ------------------------------------------------ */
   async finishWorkout() {
     const { workout, elapsedSec, exercises } = get();
     if (!workout) return;
 
-    /* actualizar duración + finished_at en BD */
     if (isSupabaseConfigured()) {
       await supabase
         .from('workout_sessions')
@@ -159,13 +150,12 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         .eq('id', workout.id);
     }
 
-    /* resumen minimal */
     const summary: WorkoutSummary = {
       duration: elapsedSec,
       totalVolume: 0,
       totalSets: exercises.length,
       totalReps: 0,
-      exercises: [], // puedes hydratearlo con una consulta extra
+      exercises: [],
     };
 
     if (timer) clearInterval(timer);

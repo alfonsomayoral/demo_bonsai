@@ -39,37 +39,21 @@ create table public.meal_items (
 );
 
 -- Tabla de ejercicios (exercises)
-CREATE TABLE public.exercises (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
-  name text NOT NULL,
-  muscle_group text NOT NULL,
-  difficulty text,
-  description text,
-  image_url text
+create table public.exercises (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.users(id) on delete set null,
+  name text not null,
+  muscle_group text not null
 );
 
 -- Tabla de sesiones de entrenamiento (workout_sessions)
-CREATE TABLE public.workout_sessions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
-  started_at timestamptz NOT NULL DEFAULT now(),
-  finished_at timestamptz,
-  duration_sec integer CHECK (duration_sec >= 0),           -- <── nuevo
-  created_at timestamptz NOT NULL DEFAULT now()
+create table public.workout_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  start_time timestamp with time zone default timezone('utc'::text, now()) not null,
+  duration_sec integer,
+  total_volume integer not null
 );
-
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE INDEX IF NOT EXISTS exercises_name_trgm
-  ON public.exercises USING gin (lower(name) gin_trgm_ops);
-
--- función
-CREATE FUNCTION public.get_last_worked_at(p_muscle text) RETURNS timestamptz
-  LANGUAGE sql STABLE PARALLEL SAFE
-  AS $$ SELECT ... $$;
-
--- MV
-CREATE MATERIALIZED VIEW public.exercise_daily_volume AS
 
 -- Tabla de ejercicios en sesión (session_exercises)
 create table public.session_exercises (
