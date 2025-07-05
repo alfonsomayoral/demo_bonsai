@@ -19,22 +19,23 @@ export const useExerciseStore = create<ExerciseState>((set, get) => ({
   loading: false,
 
   /*───────── 1. búsqueda ─────────*/
-  async searchExercises(q, group) {
+  async searchExercises(q = '', group) {
     if (!isSupabaseConfigured()) return;
     set({ loading: true });
-
+  
     const req = supabase
       .from('exercises')
       .select('*')
-      .ilike('name', `%${q}%`)
       .order('name', { ascending: true })
-      .limit(50);
-
+      .limit(100);
+  
+    /* sin texto ⇒ no aplicar filtro de nombre */
+    if (q.trim()) req.ilike('name', `%${q}%`);
     if (group && group !== 'All') req.eq('muscle_group', group);
-
+  
     const { data, error } = await req;
     if (error) console.error('[exerciseStore] searchExercises', error);
-
+  
     set({ exercises: (data as Exercise[]) ?? [], loading: false });
   },
 

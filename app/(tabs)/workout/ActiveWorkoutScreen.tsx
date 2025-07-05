@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Play, Pause, Plus } from 'lucide-react-native';
 
@@ -57,9 +58,22 @@ export default function ActiveWorkoutScreen() {
     .substring(11, 19);
 
   /* finalizar */
-  const handleFinish = async () => {
-    await finishWorkout();
-    router.replace('/workout/WorkoutSummaryScreen');
+  const handleFinish = () => {
+    Alert.alert(
+      'Finish workout',
+      'Are you sure you want to finish?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Finish',
+          style: 'destructive',
+          onPress: async () => {
+            await finishWorkout();
+            router.replace('/workout/WorkoutSummaryScreen');
+          },
+        },
+      ],
+    );
   };
 
   /* datos para lista */

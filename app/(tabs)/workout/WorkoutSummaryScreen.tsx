@@ -17,11 +17,11 @@ import { formatDuration } from '@/utils/timeUtils';
 import colors from '@/theme/colors';
 
 export default function WorkoutSummaryScreen() {
-  const { workout, workoutSummary } = useWorkoutStore();
+  const { workoutSummary } = useWorkoutStore();
 
   const handleClose = () => router.back();
 
-  if (!workout || !workoutSummary) {
+  if (!workoutSummary) {
     return (
       <SafeAreaView style={styles.container}>
         <Text>No workout data available</Text>
@@ -89,8 +89,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 24, fontWeight: 'bold', color: colors.text },
-  content: { paddingHorizontal: 20, paddingBottom: 40 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' },
+  content: { paddingHorizontal: 20, paddingBottom: 40, color: '#FFF' },
 
   statsCard: { padding: 20, marginBottom: 24 },
   statRow: {
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
     marginBottom: 16,
   },
 });
