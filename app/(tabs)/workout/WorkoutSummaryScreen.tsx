@@ -9,19 +9,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { X } from 'lucide-react-native';
+
 import { Card } from '@/components/ui/Card';
 import { WorkoutSummaryCard } from '@/components/workout/WorkoutSummaryCard';
-import { useWorkoutStore } from '@/store/workoutStore';
+import { useWorkoutStore, SummaryExercise } from '@/store/workoutStore';
 import { formatDuration } from '@/utils/timeUtils';
-import { Exercise, ExerciseSet } from '@/lib/supabase';
 import colors from '@/theme/colors';
 
 export default function WorkoutSummaryScreen() {
   const { workout, workoutSummary } = useWorkoutStore();
 
-  const handleClose = () => {
-    router.back();
-  };
+  const handleClose = () => router.back();
 
   if (!workout || !workoutSummary) {
     return (
@@ -33,7 +31,7 @@ export default function WorkoutSummaryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* header */}
       <View style={styles.header}>
         <Text style={styles.title}>Workout Complete</Text>
         <TouchableOpacity onPress={handleClose}>
@@ -42,7 +40,7 @@ export default function WorkoutSummaryScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Summary Stats */}
+        {/* summary stats */}
         <Card style={styles.statsCard}>
           <View style={styles.statRow}>
             <View style={styles.stat}>
@@ -53,35 +51,28 @@ export default function WorkoutSummaryScreen() {
             </View>
             <View style={styles.stat}>
               <Text style={styles.statValue}>
-                {workoutSummary.totalVolume}kg
+                {workoutSummary.totalVolume} kg
               </Text>
               <Text style={styles.statLabel}>Total Volume</Text>
             </View>
           </View>
           <View style={styles.statRow}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>
-                {workoutSummary.totalSets}
-              </Text>
+              <Text style={styles.statValue}>{workoutSummary.totalSets}</Text>
               <Text style={styles.statLabel}>Sets</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>
-                {workoutSummary.totalReps}
-              </Text>
+              <Text style={styles.statValue}>{workoutSummary.totalReps}</Text>
               <Text style={styles.statLabel}>Reps</Text>
             </View>
           </View>
         </Card>
 
-        {/* Exercise Summary */}
+        {/* exercises */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Exercises</Text>
-          {workoutSummary?.exercises.map((exercise: ExerciseSet) => (
-            <WorkoutSummaryCard
-              key={exercise.id}
-              exercise={exercise}
-            />
+          {workoutSummary.exercises.map((ex: SummaryExercise) => (
+            <WorkoutSummaryCard key={ex.id} exercise={ex} />
           ))}
         </View>
       </ScrollView>
@@ -90,10 +81,7 @@ export default function WorkoutSummaryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -101,40 +89,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  statsCard: {
-    padding: 20,
-    marginBottom: 24,
-  },
+  title: { fontSize: 24, fontWeight: 'bold', color: colors.text },
+  content: { paddingHorizontal: 20, paddingBottom: 40 },
+
+  statsCard: { padding: 20, marginBottom: 24 },
   statRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginBottom: 16,
   },
-  stat: {
-    alignItems: 'center',
-  },
+  stat: { alignItems: 'center' },
   statValue: {
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  section: {
-    marginBottom: 24,
-  },
+  statLabel: { fontSize: 14, color: colors.textSecondary },
+
+  section: { marginBottom: 24 },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',

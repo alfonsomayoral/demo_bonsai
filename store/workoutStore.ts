@@ -9,35 +9,51 @@ import {
   ExerciseSet,
 } from '@/lib/supabase';
 
-/* ---------- Tipos auxiliares ---------- */
-interface WorkoutSummary {
-  duration: number;      // segundos
-  totalVolume: number;   // Σ (reps·kg)
-  totalSets: number;
-  totalReps: number;
-  exercises: ExerciseSet[];
+/*──────────────────────── tipos auxiliares ───────────────────────*/
+export interface SummaryExercise {
+  id: string;
+  name: string;
+  volume: number;
+  sets: number;
+  reps: number;
 }
 
+interface WorkoutSummary {
+  duration: number;
+  totalVolume: number;
+  totalSets: number;
+  totalReps: number;
+  exercises: SummaryExercise[];
+}
+
+export type ExtendedSessionExercise = SessionExercise & {
+  name: string | null;
+  muscle_group: string | null;
+};
+
 interface WorkoutState {
-  /* Estado */
   workout: WorkoutSession | null;
-  exercises: SessionExercise[];
+  exercises: ExtendedSessionExercise[];
   elapsedSec: number;
   running: boolean;
   workoutSummary: WorkoutSummary | null;
 
-  /* Acciones */
   createWorkout: (userId?: string) => Promise<void>;
-  /** Devuelve el id de la fila `session_exercises` (o null si no hay sesión) */
-  addExerciseToWorkout: (exerciseId: string) => Promise<string | null>;
+  /** Devuelve id de session_exercises */
+  addExerciseToWorkout: (ex: {
+    id: string;
+    name: string | null;
+    muscle_group: string | null;
+  }) => Promise<string | null>;
   pauseWorkout: () => void;
   resumeWorkout: () => void;
   finishWorkout: () => Promise<void>;
 }
 
-let timer: number | null = null;
+/* setInterval en RN devuelve number (web) o Timeout (node) */
+let timer: ReturnType<typeof setInterval> | null = null;
 
-/* ---------- STORE ---------- */
+/*──────────────────────── STORE ───────────────────────────────*/
 export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   workout: null,
   exercises: [],
@@ -45,17 +61,16 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   running: false,
   workoutSummary: null,
 
-  /* 1. Crear sesión ---------------------------------------------------- */
+  /* 1 ─ crear sesión */
   async createWorkout(userId) {
     if (get().workout) return;
 
     let uid = userId;
     if (!uid && isSupabaseConfigured()) {
       const { data } = await supabase.auth.getUser();
-      uid = data.user?.id;
+      uid = data.user?.id ?? undefined;
     }
 
-    /* Modo offline */
     if (!isSupabaseConfigured() || !uid) {
       set({ workout: mockWorkoutSession, running: true, elapsedSec: 0 });
     } else {
@@ -69,7 +84,6 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         .select()
         .single();
       if (error) throw error;
-
       set({ workout: data as WorkoutSession, running: true, elapsedSec: 0 });
     }
 
@@ -79,53 +93,58 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     );
   },
 
-  /* 2. Añadir ejercicio a la sesión ----------------------------------- */
-  async addExerciseToWorkout(exerciseId) {
+  /* 2 ─ añadir ejercicio */
+  async addExerciseToWorkout(ex) {
     const { workout, exercises } = get();
     if (!workout) return null;
-  
-    const baseRow = {
-      session_id: workout.id,
-      exercise_id: exerciseId,
-      order_idx: exercises.length,
-    };
-  
-    /* ---------- OFFLINE ---------- */
+
+    const dup = exercises.find((se) => se.exercise_id === ex.id);
+    if (dup) return dup.id;
+
+    /* OFF-LINE */
     if (!isSupabaseConfigured()) {
-      const row: SessionExercise = {
+      const row: ExtendedSessionExercise = {
         id: crypto.randomUUID(),
-        ...baseRow,
+        session_id: workout.id,
+        exercise_id: ex.id,
         user_id: workout.user_id ?? 'offline',
+        order_idx: exercises.length,
         created_at: new Date().toISOString(),
+        name: ex.name,
+        muscle_group: ex.muscle_group,
       };
       set({ exercises: [...exercises, row] });
       return row.id;
     }
-  
-    /* ---------- ONLINE ----------- */
+
+    /* ON-LINE */
     const { data, error } = await supabase
       .from('session_exercises')
-      .insert(baseRow)
+      .insert({
+        session_id: workout.id,
+        exercise_id: ex.id,
+        user_id: workout.user_id,          // ← NECESARIO (NOT NULL)
+        order_idx: exercises.length,
+      })
       .select()
       .single();
     if (error) throw error;
-  
-    const row: SessionExercise = {
-      ...data,
-      user_id: workout.user_id,                // aseguramos la clave
-      created_at: new Date().toISOString(),
+
+    const row: ExtendedSessionExercise = {
+      ...(data as SessionExercise),
+      name: ex.name,
+      muscle_group: ex.muscle_group,
     };
     set({ exercises: [...exercises, row] });
     return row.id;
   },
 
-  /* 3. Cronómetro ------------------------------------------------------ */
+  /* 3 ─ cronómetro */
   pauseWorkout() {
     if (timer) clearInterval(timer);
     timer = null;
     set({ running: false });
   },
-
   resumeWorkout() {
     if (timer || !get().workout) return;
     timer = setInterval(
@@ -135,27 +154,34 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     set({ running: true });
   },
 
-  /* 4. Finalizar sesión ------------------------------------------------ */
+  /* 4 ─ finalizar */
   async finishWorkout() {
     const { workout, elapsedSec, exercises } = get();
     if (!workout) return;
 
+    /* actualizar duración en BBDD si estamos online */
     if (isSupabaseConfigured()) {
       await supabase
         .from('workout_sessions')
-        .update({
-          duration_sec: elapsedSec,
-          finished_at: new Date().toISOString(),
-        })
+        .update({ duration_sec: elapsedSec })
         .eq('id', workout.id);
     }
+
+    /* resumen mínimo (solo títulos; volumen real vendrá del setStore) */
+    const summaryExercises: SummaryExercise[] = exercises.map((se) => ({
+      id: se.id,
+      name: se.name ?? 'Exercise',
+      volume: 0,
+      sets: 0,
+      reps: 0,
+    }));
 
     const summary: WorkoutSummary = {
       duration: elapsedSec,
       totalVolume: 0,
-      totalSets: exercises.length,
+      totalSets: 0,
       totalReps: 0,
-      exercises: [],
+      exercises: summaryExercises,
     };
 
     if (timer) clearInterval(timer);

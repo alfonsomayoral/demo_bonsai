@@ -21,26 +21,53 @@ import colors from '@/theme/colors';
 export default function ExercisePickerScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const { exercises, searchExercises } = useExerciseStore();
-  const { addExerciseToWorkout } = useWorkoutStore();
+  const {
+    workout,
+    createWorkout,
+    addExerciseToWorkout,
+  } = useWorkoutStore();
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  /* búsqueda */
+  /* ---------------- helpers ---------------- */
   useEffect(() => {
-    const id = setTimeout(() => searchExercises(searchQuery), 250);
-    return () => clearTimeout(id);
+    if (searchQuery.trim()) searchExercises(searchQuery.trim());
   }, [searchQuery]);
 
-  /* ------------ handlers ------------ */
-  const handleAdd = async (exercise: Exercise) => {
-    const sessionExerciseId = await addExerciseToWorkout(exercise.id);
-    if (sessionExerciseId) {
-      router.replace(`/workout/exercise/${sessionExerciseId}`); // TRACK
+  const handleAdd = async (ex: Exercise) => {
+    setLoadingId(ex.id);
+
+    // Si aún no hay sesión activa la creamos
+    if (!useWorkoutStore.getState().workout) {
+      try {
+        await createWorkout();
+      } catch (e) {
+        setLoadingId(null);
+        alert('Could not start workout');
+        return;
+      }
     }
+
+    // Añadimos / recuperamos el ejercicio de la sesión
+    const sessId = await addExerciseToWorkout({
+      id: ex.id,
+      name: ex.name ?? null,
+      muscle_group: ex.muscle_group ?? null,
+    });
+
+    if (!sessId) {
+      setLoadingId(null);
+      alert('Could not add exercise');
+      return;
+    }
+
+    setLoadingId(null);
+    router.replace(`/workout/exercise/session/${sessId}`);
   };
 
-  const handleInfo = (exercise: Exercise) =>
-    router.push(`/workout/exercise/${exercise.id}`); // INFO
+  const handleInfo = (ex: Exercise) =>
+    router.push(`/workout/exercise/${ex.id}`);
 
-  /* ------------ render item ------------ */
+  /* ---------------- render item ---------------- */
   const renderItem = ({ item }: { item: Exercise }) => (
     <Card style={styles.exerciseCard}>
       <View style={styles.exerciseInfo}>
@@ -53,14 +80,18 @@ export default function ExercisePickerScreen() {
           <Info color={colors.primary} size={20} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => handleAdd(item)} style={[styles.iconBtn, styles.addBtn]}>
+        <TouchableOpacity
+          onPress={() => handleAdd(item)}
+          style={[styles.iconBtn, styles.addBtn]}
+          disabled={loadingId === item.id}
+        >
           <Plus color="#fff" size={20} />
         </TouchableOpacity>
       </View>
     </Card>
   );
 
-  /* ------------ UI ------------ */
+  /* ---------------- UI ---------------- */
   return (
     <SafeAreaView style={styles.container}>
       {/* header */}
@@ -82,7 +113,6 @@ export default function ExercisePickerScreen() {
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            autoFocus
           />
         </View>
       </View>
@@ -90,58 +120,49 @@ export default function ExercisePickerScreen() {
       {/* list */}
       <FlatList
         data={exercises}
-        renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        renderItem={renderItem}
         contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
   );
 }
 
-/* ------------ styles ------------ */
+/* ---------------- styles ---------------- */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   title: { fontSize: 18, fontWeight: '600', color: colors.text },
 
-  searchContainer: { paddingHorizontal: 20, marginBottom: 16 },
+  searchContainer: { paddingHorizontal: 20, marginTop: 12 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
   },
   searchInput: { flex: 1, fontSize: 16, color: colors.text },
-
-  list: { paddingHorizontal: 20, paddingBottom: 20 },
+  list: { paddingHorizontal: 20, paddingVertical: 20 },
 
   exerciseCard: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
     padding: 16,
+    borderRadius: 12,
     backgroundColor: colors.card,
+    marginBottom: 12,
   },
   exerciseInfo: { flex: 1 },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  exerciseMuscle: { fontSize: 14, fontStyle: 'italic', color: colors.textSecondary },
+  exerciseName: { fontSize: 16, fontWeight: '500', color: colors.text, marginBottom: 4 },
+  exerciseMuscle: { fontSize: 13, fontStyle: 'italic', color: colors.textSecondary },
 
   buttons: { flexDirection: 'row', gap: 8, marginLeft: 12 },
   iconBtn: {

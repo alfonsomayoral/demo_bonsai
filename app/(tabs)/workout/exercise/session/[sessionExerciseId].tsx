@@ -5,6 +5,7 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -65,23 +66,25 @@ export default function ExerciseSessionScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft color={colors.primary} size={24} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{exercise.name}</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        {/* header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <ArrowLeft color={colors.primary} size={24} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{exercise.name}</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
-      <FlatList
-        data={sets}
-        renderItem={renderSet}
-        keyExtractor={(i) => i.id}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={<ComparisonCard exerciseId={exercise.id} />}
-      />
+        <FlatList
+          data={sets}
+          renderItem={renderSet}
+          keyExtractor={(i) => i.id}
+          contentContainerStyle={styles.list}
+          ListHeaderComponent={<ComparisonCard exerciseId={exercise.id} />}
+        />
+      </SafeAreaView>
 
       {/* FAB add set */}
       <TouchableOpacity style={styles.fab} onPress={() => setShowPad(true)}>
@@ -94,14 +97,17 @@ export default function ExerciseSessionScreen() {
         onClose={() => setShowPad(false)}
         onSave={handleSaveSet}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 /*------------- styles -------------*/
+const { width: screenWidth } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   container: { flex: 1, backgroundColor: colors.background },
+  safeArea: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -115,7 +121,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 30,
-    right: 20,
+    left: (screenWidth - 56) / 2, // Center the FAB horizontally
     backgroundColor: colors.primary,
     width: 56,
     height: 56,
