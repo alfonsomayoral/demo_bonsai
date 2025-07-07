@@ -105,7 +105,7 @@ export default function ExerciseInfoScreen() {
     }
 
     setAdding(false);
-    router.replace(`/workout/exercise/${sessId}`);
+    router.replace(`/workout/exercise/session/${sessId}`);
   };
 
   /* ───── render ───── */

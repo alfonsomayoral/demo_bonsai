@@ -1,4 +1,4 @@
-/* Maneja el entrenamiento activo: cronómetro, ejercicios y resumen */
+/* Entrenamiento activo */
 import { create } from 'zustand';
 import {
   supabase,
@@ -8,8 +8,8 @@ import {
   SessionExercise,
   ExerciseSet,
 } from '@/lib/supabase';
+import { useSetStore } from '@/store/setStore';
 
-/*──────────────────────── tipos auxiliares ───────────────────────*/
 export interface SummaryExercise {
   id: string;
   name: string;
@@ -17,15 +17,14 @@ export interface SummaryExercise {
   sets: number;
   reps: number;
 }
-
 interface WorkoutSummary {
   duration: number;
   totalVolume: number;
   totalSets: number;
   totalReps: number;
+  totalExercises: number; 
   exercises: SummaryExercise[];
 }
-
 export type ExtendedSessionExercise = SessionExercise & {
   name: string | null;
   muscle_group: string | null;
@@ -37,9 +36,7 @@ interface WorkoutState {
   elapsedSec: number;
   running: boolean;
   workoutSummary: WorkoutSummary | null;
-
   createWorkout: (userId?: string) => Promise<void>;
-  /** Devuelve id de session_exercises */
   addExerciseToWorkout: (ex: {
     id: string;
     name: string | null;
@@ -50,10 +47,15 @@ interface WorkoutState {
   finishWorkout: () => Promise<void>;
 }
 
-/* setInterval en RN devuelve number (web) o Timeout (node) */
 let timer: ReturnType<typeof setInterval> | null = null;
 
-/*──────────────────────── STORE ───────────────────────────────*/
+const genId = (): string => {
+  if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) {
+    return (crypto as any).randomUUID();
+  }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+};
+/*────────────────── STORE ──────────────────*/
 export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   workout: null,
   exercises: [],
@@ -104,7 +106,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     /* OFF-LINE */
     if (!isSupabaseConfigured()) {
       const row: ExtendedSessionExercise = {
-        id: crypto.randomUUID(),
+        id: genId(),
         session_id: workout.id,
         exercise_id: ex.id,
         user_id: workout.user_id ?? 'offline',
@@ -113,7 +115,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         name: ex.name,
         muscle_group: ex.muscle_group,
       };
-      set({ exercises: [...exercises, row] });
+      set((s) => ({ exercises: [...s.exercises, row] }));
       return row.id;
     }
 
@@ -123,7 +125,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       .insert({
         session_id: workout.id,
         exercise_id: ex.id,
-        user_id: workout.user_id,          // ← NECESARIO (NOT NULL)
+        user_id: workout.user_id,
         order_idx: exercises.length,
       })
       .select()
@@ -135,7 +137,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       name: ex.name,
       muscle_group: ex.muscle_group,
     };
-    set({ exercises: [...exercises, row] });
+    set((s) => ({ exercises: [...s.exercises, row] }));
     return row.id;
   },
 
@@ -154,45 +156,62 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     set({ running: true });
   },
 
-  /* 4 ─ finalizar */
-  async finishWorkout() {
-    const { workout, elapsedSec, exercises } = get();
-    if (!workout) return;
+ /* 4 ─ finalizar */
+ async finishWorkout() {
+  const { workout, elapsedSec, exercises } = get();
+  if (!workout) return;
 
-    /* actualizar duración en BBDD si estamos online */
-    if (isSupabaseConfigured()) {
-      await supabase
-        .from('workout_sessions')
-        .update({ duration_sec: elapsedSec })
-        .eq('id', workout.id);
-    }
+  const allSets = useSetStore.getState().sets;
 
-    /* resumen mínimo (solo títulos; volumen real vendrá del setStore) */
-    const summaryExercises: SummaryExercise[] = exercises.map((se) => ({
+  let totalVol = 0;
+  let totalSets = 0;
+  let totalReps = 0;
+
+  const summaryExercises: SummaryExercise[] = exercises.map((se) => {
+    const sets = allSets.filter(
+      (s: ExerciseSet) => s.session_exercise_id === se.id,
+    );
+
+    const vol = sets.reduce(
+      (acc: number, s: ExerciseSet) => acc + (s.volume ?? 0),
+      0,
+    );
+    const reps = sets.reduce(
+      (acc: number, s: ExerciseSet) => acc + s.reps,
+      0,
+    );
+
+    totalVol += vol;
+    totalSets += sets.length;
+    totalReps += reps;
+
+    return {
       id: se.id,
       name: se.name ?? 'Exercise',
-      volume: 0,
-      sets: 0,
-      reps: 0,
-    }));
-
-    const summary: WorkoutSummary = {
-      duration: elapsedSec,
-      totalVolume: 0,
-      totalSets: 0,
-      totalReps: 0,
-      exercises: summaryExercises,
+      volume: sets.length ? Math.round(vol / sets.length) : 0,
+      sets: sets.length,
+      reps: sets.length ? Math.round(reps / sets.length) : 0,
     };
+  });
 
-    if (timer) clearInterval(timer);
-    timer = null;
+  const summary: WorkoutSummary = {
+    duration: elapsedSec,
+    totalVolume: totalVol,
+    totalSets,
+    totalReps,
+    totalExercises: exercises.length,
+    exercises: summaryExercises,
+  };
 
-    set({
-      workout: null,
-      exercises: [],
-      elapsedSec: 0,
-      running: false,
-      workoutSummary: summary,
-    });
-  },
+  if (timer) clearInterval(timer);
+  timer = null;
+
+  set({
+    workout: null,
+    exercises: [],
+    elapsedSec: 0,
+    running: false,
+    workoutSummary: summary,
+  });
+},
 }));

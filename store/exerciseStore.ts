@@ -60,7 +60,9 @@ export const useExerciseStore = create<ExerciseState>((set, get) => ({
         .select('*')
         .eq('id', se.exercise_id)
         .single();
-      if (data) set({ exercises: [...get().exercises, data as Exercise] });
+      if (data) {
+        set((s) => ({ exercises: [...s.exercises, data as Exercise] }));
+      }
     })();
 
     return null;

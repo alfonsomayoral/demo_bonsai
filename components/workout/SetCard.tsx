@@ -1,9 +1,5 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Card } from '@/components/ui/Card';
 import { ExerciseSet as Set } from '@/lib/supabase';
 import { formatTime } from '@/utils/timeUtils';
@@ -14,23 +10,18 @@ interface SetCardProps {
   onDuplicate: () => void;
 }
 
-export function SetCard({ set, setNumber, onDuplicate }: SetCardProps) {
+export function SetCard({ set, setNumber }: SetCardProps) {
   return (
     <Card style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          Set {setNumber} - {formatTime(set.created_at)}
-        </Text>
-      </View>
-      <View style={styles.content}>
-        <View style={styles.stat}>
-          <Text style={[styles.value, styles.repsValue]}>{set.reps}</Text>
-          <Text style={styles.label}>reps</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={[styles.value, styles.weightValue]}>{set.weight}kg</Text>
-          <Text style={styles.label}>weight</Text>
-        </View>
+      {/* cabecera opcional */}
+      <Text style={styles.title}>
+        Set {setNumber} – {formatTime(set.created_at)}
+      </Text>
+
+      {/* fila principal */}
+      <View style={styles.row}>
+        <Text style={styles.reps}>{set.reps} reps</Text>
+        <Text style={styles.weight}>{set.weight} kg</Text>
       </View>
     </Card>
   );
@@ -38,36 +29,31 @@ export function SetCard({ set, setNumber, onDuplicate }: SetCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 12,
-  },
-  header: {
-    marginBottom: 12,
+    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   title: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#8E8E93',
+    marginBottom: 8,
   },
-  content: {
+
+  /* nueva distribución: izquierda / derecha */
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  stat: {
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  value: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
+  reps: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FF9500', // naranja ≙ reps
   },
-  repsValue: {
-    color: '#FF9500',
-  },
-  weightValue: {
-    color: '#34C759',
-  },
-  label: {
-    fontSize: 12,
-    color: '#8E8E93',
+  weight: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#34C759', // verde ≙ peso
   },
 });

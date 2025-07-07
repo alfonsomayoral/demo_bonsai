@@ -1,4 +1,3 @@
-/* filename: app/store/setStore.ts */
 import { create } from 'zustand';
 import {
   supabase,
@@ -6,12 +5,16 @@ import {
   ExerciseSet,
 } from '@/lib/supabase';
 
+/* ---------- UID helper (Web + RN) ---------- */
+const genId = (): string =>
+  typeof crypto !== 'undefined' && (crypto as any).randomUUID
+    ? (crypto as any).randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+
 interface SetState {
   sets: ExerciseSet[];
   loading: boolean;
-
   loadSets: (sessionExerciseId: string) => Promise<void>;
-  loadSetsForExercise: (sessionExerciseId: string) => Promise<void>;
   addSet: (
     sessionExerciseId: string,
     reps: number,
@@ -23,11 +26,10 @@ interface SetState {
 }
 
 export const useSetStore = create<SetState>((set, get) => ({
-  /* state ---------------------- */
   sets: [],
   loading: false,
 
-  /* 1 ─ cargar sets ------------- */
+  /* ────── cargar ────── */
   async loadSets(sessionExerciseId) {
     if (!isSupabaseConfigured()) return;
     set({ loading: true });
@@ -36,69 +38,70 @@ export const useSetStore = create<SetState>((set, get) => ({
       .from('exercise_sets')
       .select('*')
       .eq('session_exercise_id', sessionExerciseId)
-      .order('performed_at', { ascending: true });
+      .order('performed_at');
 
     if (error) console.error('[setStore] loadSets', error);
-    set({ sets: (data as ExerciseSet[]) ?? [], loading: false });
+
+    set((s) => {
+      const map = new Map<string, ExerciseSet>();
+      s.sets.forEach((row) => map.set(row.id, row));
+      (data as ExerciseSet[]).forEach((row) => map.set(row.id, row));
+      return { sets: Array.from(map.values()), loading: false };
+    });
   },
-  loadSetsForExercise: async (id) => get().loadSets(id),
 
-  /* 2 ─ añadir set -------------- */
+  /* ────── añadir ────── */
   async addSet(sessionExerciseId, reps, weight, rpe) {
-    /* uid si estamos online */
-    let uid: string | null = null;
-    if (isSupabaseConfigured()) {
-      const { data } = await supabase.auth.getUser();
-      uid = data.user?.id ?? null;
-    }
+    const now = new Date().toISOString();
 
-    const newSet: ExerciseSet = {
-      id: crypto.randomUUID(),
+    /* placeholder local (incluye volume para la UI offline) */
+    const local: ExerciseSet = {
+      id: genId(),
       session_exercise_id: sessionExerciseId,
-      user_id: uid ?? 'offline',
       reps,
       weight,
       rpe: rpe ?? null,
-      performed_at: new Date().toISOString(),
+      performed_at: now,
+      created_at: now,
       volume: reps * weight,
     };
 
-    /* OFF-LINE */
-    if (!isSupabaseConfigured()) {
-      set({ sets: [...get().sets, newSet] });
-      return;
+    /* pinta inmediatamente */
+    set((s) => ({ sets: [...s.sets, local] }));
+
+    /* sincronizar si hay sesión */
+    if (
+      isSupabaseConfigured() &&
+      (await supabase.auth.getSession()).data.session
+    ) {
+      const { error } = await supabase.from('exercise_sets').insert({
+        session_exercise_id: local.session_exercise_id,
+        reps: local.reps,
+        weight: local.weight,
+        rpe: local.rpe,
+        performed_at: local.performed_at,
+        created_at: local.created_at,
+        /* volume OMITIDO – lo genera Postgres */
+      });
+
+      if (error) {
+        console.error('[setStore] addSet (sync)', error);
+      } else {
+        /* opcional: recargar sets para que lleguen con volume calculado */
+        void get().loadSets(sessionExerciseId);
+      }
     }
-
-    /* ON-LINE */
-    const { data, error } = await supabase
-      .from('exercise_sets')
-      .insert(newSet)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('[setStore] addSet (insert)', error);
-      return;
-    }
-
-    set({ sets: [...get().sets, data as ExerciseSet] });
   },
 
-  /* 3 ─ duplicar set ------------- */
-  duplicateSet(setId) {
-    const original = get().sets.find((s) => s.id === setId);
-    if (!original) return;
-    void get().addSet(
-      original.session_exercise_id,
-      original.reps,
-      original.weight,
-      original.rpe,
-    );
+  /* ────── duplicar ────── */
+  duplicateSet(id) {
+    const src = get().sets.find((s) => s.id === id);
+    if (src)
+      get().addSet(src.session_exercise_id, src.reps, src.weight, src.rpe);
   },
 
-  /* 4 ─ utilidad ----------------- */
-  getSetCountForExercise(sessionExerciseId) {
-    return get().sets.filter((s) => s.session_exercise_id === sessionExerciseId)
-      .length;
+  /* ────── helper ────── */
+  getSetCountForExercise(id) {
+    return get().sets.filter((s) => s.session_exercise_id === id).length;
   },
 }));

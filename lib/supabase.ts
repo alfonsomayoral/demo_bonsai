@@ -194,67 +194,73 @@ export type Database = {
       };
 
       /*────────────────────────── session_exercises ───────────────────────*/
-session_exercises: {
-  Row: {
-    id: string;
-    session_id: string;
-    exercise_id: string;
-    user_id: string;
-    order_idx: number;          //  ←  RESTAURADO
-    created_at: string;
-  };
-  Insert: {
-    id?: string;
-    session_id: string;
-    exercise_id: string;
-    user_id: string;
-    order_idx: number;
-    created_at?: string;
-  };
-  Update: {
-    id?: string;
-    session_id?: string;
-    exercise_id?: string;
-    user_id?: string;
-    order_idx?: number;
-    created_at?: string;
-  };
-};
-
+      session_exercises: {
+        Row: {
+          id: string;
+          session_id: string;
+          exercise_id: string;
+          user_id: string;
+          order_idx: number;
+          created_at: string;
+          name: string | null;          
+          muscle_group: string | null;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          exercise_id: string;
+          user_id: string;
+          order_idx: number;
+          created_at?: string;
+          name?: string | null;          
+          muscle_group?: string | null;
+        };
+        Update: {
+          id?: string;
+          session_id?: string;
+          exercise_id?: string;
+          user_id?: string;
+          order_idx?: number;
+          created_at?: string;
+          name?: string | null;         
+          muscle_group?: string | null;
+        };
+      };
 
       /*──────────────────────────── exercise_sets ─────────────────────────*/
       exercise_sets: {
         Row: {
           id: string;
           session_exercise_id: string;
-          user_id: string;
           weight: number;
           reps: number;
-          performed_at: string;
           rpe: number | null;
           volume: number | null;
+          performed_at: string;
+          created_at: string;          // ← añadido
         };
         Insert: {
           id?: string;
           session_exercise_id: string;
-          user_id: string;
           weight: number;
           reps: number;
           performed_at?: string;
           rpe?: number | null;
           volume?: number | null;
+          created_at?: string;         // ← añadido
         };
         Update: {
           id?: string;
           session_exercise_id?: string;
-          user_id?: string;
           weight?: number;
           reps?: number;
           performed_at?: string;
           rpe?: number | null;
           volume?: number | null;
+          created_at?: string;         // ← añadido
         };
       };
+
 
       /*────────────────────────────── routines ────────────────────────────*/
       routines: {

@@ -62,13 +62,15 @@ export default function WorkoutSummaryScreen() {
               <Text style={styles.statLabel}>Sets</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{workoutSummary.totalReps}</Text>
-              <Text style={styles.statLabel}>Reps</Text>
+              <Text style={styles.statValue}>
+                {workoutSummary.totalExercises}
+              </Text>
+              <Text style={styles.statLabel}>Exercises</Text>
             </View>
           </View>
         </Card>
 
-        {/* exercises */}
+        {/* exercises list */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Exercises</Text>
           {workoutSummary.exercises.map((ex: SummaryExercise) => (
@@ -89,8 +91,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' },
-  content: { paddingHorizontal: 20, paddingBottom: 40, color: '#FFF' },
+  title: { fontSize: 24, fontWeight: 'bold', color: colors.primary },
+  content: { paddingHorizontal: 20, paddingBottom: 40 },
 
   statsCard: { padding: 20, marginBottom: 24 },
   statRow: {
@@ -102,7 +104,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.text,
+    color: '#000',
     marginBottom: 4,
   },
   statLabel: { fontSize: 14, color: colors.textSecondary },
@@ -111,7 +113,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 16,
   },
 });

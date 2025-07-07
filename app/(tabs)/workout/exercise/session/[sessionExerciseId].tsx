@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import { SetPad } from '@/components/workout/SetPad';
 import { useSetStore } from '@/store/setStore';
 import { useExerciseStore } from '@/store/exerciseStore';
 import { useWorkoutStore } from '@/store/workoutStore';
-import { ExerciseSet } from '@/lib/supabase';
 import colors from '@/theme/colors';
 
 export default function ExerciseSessionScreen() {
@@ -26,37 +25,30 @@ export default function ExerciseSessionScreen() {
 
   const [showPad, setShowPad] = useState(false);
 
-  /* stores */
   const { sets, loadSets, addSet, duplicateSet } = useSetStore();
-  const { exercises: sessionExercises } = useWorkoutStore();
+  const { exercises } = useWorkoutStore();
   const { getExerciseById } = useExerciseStore();
 
-  /* localizar la fila session_exercises y luego el ejercicio */
-  const sessionEx = sessionExercises.find((se) => se.id === sessionExerciseId);
+  /* obtener nombre del ejercicio */
+  const sessionEx = exercises.find((se) => se.id === sessionExerciseId);
   const exercise = sessionEx ? getExerciseById(sessionEx.exercise_id) : null;
 
-  /* cargar sets al montar */
+  /* cargar sets una sola vez */
   useEffect(() => {
     if (sessionExerciseId) loadSets(sessionExerciseId);
   }, [sessionExerciseId]);
 
-  /*------------- handlers -------------*/
-  const handleSaveSet = (reps: number, weight: number) => {
+  /* guardar */
+  const handleSave = (reps: number, weight: number) => {
     addSet(sessionExerciseId!, reps, weight);
     setShowPad(false);
   };
 
-  const handleDuplicate = (set: ExerciseSet) => duplicateSet(set.id);
-
-  const renderSet = ({ item, index }: { item: ExerciseSet; index: number }) => (
-    <SetCard
-      set={item}
-      setNumber={index + 1}
-      onDuplicate={() => handleDuplicate(item)}
-    />
+  /* sólo sets de este ejercicio */
+  const filtered = sets.filter(
+    (s) => s.session_exercise_id === sessionExerciseId,
   );
 
-  /*------------- UI -------------*/
   if (!exercise) {
     return (
       <SafeAreaView style={styles.center}>
@@ -78,34 +70,40 @@ export default function ExerciseSessionScreen() {
         </View>
 
         <FlatList
-          data={sets}
-          renderItem={renderSet}
+          data={filtered}
           keyExtractor={(i) => i.id}
+          renderItem={({ item, index }) => (
+            <SetCard
+              set={item}
+              setNumber={index + 1}
+              onDuplicate={() => duplicateSet(item.id)}
+            />
+          )}
           contentContainerStyle={styles.list}
-          ListHeaderComponent={<ComparisonCard exerciseId={exercise.id} />}
+          ListHeaderComponent={
+            <ComparisonCard exerciseId={exercise.id} />
+          }
         />
       </SafeAreaView>
 
-      {/* FAB add set */}
+      {/* FAB */}
       <TouchableOpacity style={styles.fab} onPress={() => setShowPad(true)}>
         <Plus color="#fff" size={24} />
       </TouchableOpacity>
 
-      {/* número pad */}
       <SetPad
         visible={showPad}
         onClose={() => setShowPad(false)}
-        onSave={handleSaveSet}
+        onSave={handleSave}
       />
     </View>
   );
 }
 
-/*------------- styles -------------*/
-const { width: screenWidth } = Dimensions.get('window');
-
+/* styles */
+const { width } = Dimensions.get('window');
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   container: { flex: 1, backgroundColor: colors.background },
   safeArea: { flex: 1 },
   header: {
@@ -117,15 +115,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
   list: { paddingHorizontal: 20, paddingBottom: 100 },
-
   fab: {
     position: 'absolute',
     bottom: 30,
-    left: (screenWidth - 56) / 2, // Center the FAB horizontally
-    backgroundColor: colors.primary,
+    left: (width - 56) / 2,
     width: 56,
     height: 56,
     borderRadius: 28,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
