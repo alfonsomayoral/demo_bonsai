@@ -81,7 +81,10 @@ export default function ExerciseSessionScreen() {
           )}
           contentContainerStyle={styles.list}
           ListHeaderComponent={
-            <ComparisonCard exerciseId={exercise.id} />
+            <ComparisonCard 
+              exerciseId={exercise.id}
+              sessionExerciseId={sessionExerciseId!} 
+            />
           }
         />
       </SafeAreaView>
