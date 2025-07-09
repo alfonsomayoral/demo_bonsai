@@ -1,15 +1,11 @@
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
 import { create } from 'zustand';
 import {
   supabase,
   isSupabaseConfigured,
   ExerciseSet,
 } from '@/lib/supabase';
-
-/* ---------- UID helper (Web + RN) ---------- */
-const genId = (): string =>
-  typeof crypto !== 'undefined' && (crypto as any).randomUUID
-    ? (crypto as any).randomUUID()
-    : Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 interface SetState {
   sets: ExerciseSet[];
@@ -54,16 +50,15 @@ export const useSetStore = create<SetState>((set, get) => ({
   async addSet(sessionExerciseId, reps, weight, rpe) {
     const now = new Date().toISOString();
 
-    /* placeholder local (incluye volume para la UI offline) */
     const local: ExerciseSet = {
-      id: genId(),
+      id: uuidv4(),                       // UUID v4 válido
       session_exercise_id: sessionExerciseId,
       reps,
       weight,
       rpe: rpe ?? null,
       performed_at: now,
       created_at: now,
-      volume: reps * weight,
+      volume: reps * weight,              // solo para la UI offline
     };
 
     /* pinta inmediatamente */
@@ -75,19 +70,20 @@ export const useSetStore = create<SetState>((set, get) => ({
       (await supabase.auth.getSession()).data.session
     ) {
       const { error } = await supabase.from('exercise_sets').insert({
+        id: local.id,                      // mismo UUID
         session_exercise_id: local.session_exercise_id,
         reps: local.reps,
         weight: local.weight,
         rpe: local.rpe,
         performed_at: local.performed_at,
         created_at: local.created_at,
-        /* volume OMITIDO – lo genera Postgres */
+        /* volume OMITIDO – columna generada */
       });
 
       if (error) {
         console.error('[setStore] addSet (sync)', error);
       } else {
-        /* opcional: recargar sets para que lleguen con volume calculado */
+        /* recargar para traer la fila con volume calculado */
         void get().loadSets(sessionExerciseId);
       }
     }

@@ -1,4 +1,5 @@
-/* Entrenamiento activo */
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
 import { create } from 'zustand';
 import {
   supabase,
@@ -10,6 +11,12 @@ import {
 } from '@/lib/supabase';
 import { useSetStore } from '@/store/setStore';
 
+/* ---------- helper sesión ---------- */
+const hasAuthSession = async () =>
+  isSupabaseConfigured() &&
+  (await supabase.auth.getSession()).data.session !== null;
+
+/* ---------- tipos ---------- */
 export interface SummaryExercise {
   id: string;
   name: string;
@@ -22,7 +29,7 @@ interface WorkoutSummary {
   totalVolume: number;
   totalSets: number;
   totalReps: number;
-  totalExercises: number; 
+  totalExercises: number;
   exercises: SummaryExercise[];
 }
 export type ExtendedSessionExercise = SessionExercise & {
@@ -49,12 +56,6 @@ interface WorkoutState {
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
-const genId = (): string => {
-  if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) {
-    return (crypto as any).randomUUID();
-  }
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-};
 /*────────────────── STORE ──────────────────*/
 export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   workout: null,
@@ -67,15 +68,19 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   async createWorkout(userId) {
     if (get().workout) return;
 
+    const online = await hasAuthSession();
     let uid = userId;
-    if (!uid && isSupabaseConfigured()) {
+
+    if (online && !uid) {
       const { data } = await supabase.auth.getUser();
-      uid = data.user?.id ?? undefined;
+      uid = data.user!.id;
     }
 
-    if (!isSupabaseConfigured() || !uid) {
+    if (!online || !uid) {
+      /* OFF-LINE: mock */
       set({ workout: mockWorkoutSession, running: true, elapsedSec: 0 });
     } else {
+      /* ON-LINE: insertar sesión */
       const { data, error } = await supabase
         .from('workout_sessions')
         .insert({
@@ -103,10 +108,12 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     const dup = exercises.find((se) => se.exercise_id === ex.id);
     if (dup) return dup.id;
 
-    /* OFF-LINE */
-    if (!isSupabaseConfigured()) {
+    const online = await hasAuthSession();
+
+    if (!online) {
+      /* OFF-LINE */
       const row: ExtendedSessionExercise = {
-        id: genId(),
+        id: uuidv4(),
         session_id: workout.id,
         exercise_id: ex.id,
         user_id: workout.user_id ?? 'offline',
@@ -160,6 +167,16 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
  async finishWorkout() {
   const { workout, elapsedSec, exercises } = get();
   if (!workout) return;
+
+  if (timer) clearInterval(timer);
+  timer = null;
+
+  if (await hasAuthSession()) {
+    await supabase
+      .from('workout_sessions')
+      .update({ duration_sec: elapsedSec })
+      .eq('id', workout.id);
+  }
 
   const allSets = useSetStore.getState().sets;
 

@@ -5,6 +5,8 @@ import { SummaryExercise } from '@/store/workoutStore';
 import colors from '@/theme/colors';
 
 export function WorkoutSummaryCard({ exercise }: { exercise: SummaryExercise }) {
+  const avgVol =
+    exercise.reps > 0 ? Math.round(exercise.volume / exercise.reps) : 0;
   return (
     <Card style={styles.container}>
       <Text style={styles.name}>{exercise.name}</Text>
@@ -19,8 +21,8 @@ export function WorkoutSummaryCard({ exercise }: { exercise: SummaryExercise }) 
           <Text style={styles.label}>avg reps</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.value}>{exercise.volume} kg</Text>
-          <Text style={styles.label}>avg vol</Text>
+          <Text style={styles.value}>{avgVol} kg</Text>
+          <Text style={styles.label}>avg volume</Text>
         </View>
       </View>
     </Card>
