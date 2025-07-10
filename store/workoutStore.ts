@@ -8,21 +8,23 @@ import {
   WorkoutSession,
   SessionExercise,
   ExerciseSet,
+  ExerciseWorkoutMetricsInsert,
 } from '@/lib/supabase';
 import { useSetStore } from '@/store/setStore';
 
-/* ---------- helper sesión ---------- */
+/* helper */
 const hasAuthSession = async () =>
   isSupabaseConfigured() &&
   (await supabase.auth.getSession()).data.session !== null;
 
-/* ---------- tipos ---------- */
+/* tipos para el resumen in-app */
 export interface SummaryExercise {
-  id: string;
+  sessionExerciseId: string;
+  exerciseId: string;
   name: string;
-  volume: number;
+  volume: number; /* avg vol / set */
   sets: number;
-  reps: number;
+  reps: number;   /* total reps */
 }
 interface WorkoutSummary {
   duration: number;
@@ -168,49 +170,71 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   const { workout, elapsedSec, exercises } = get();
   if (!workout) return;
 
+  /* detener cronómetro */
   if (timer) clearInterval(timer);
   timer = null;
 
-  if (await hasAuthSession()) {
+  const session = await supabase.auth.getSession();
+  const online  = isSupabaseConfigured() && !!session.data.session;
+  const userId  = workout.user_id ?? session.data.session?.user.id ?? null;
+
+  /* guardar duración si estamos on-line */
+  if (online && workout.id) {
     await supabase
       .from('workout_sessions')
       .update({ duration_sec: elapsedSec })
       .eq('id', workout.id);
   }
 
+  /* ---------------- resumen por ejercicio ---------------- */
   const allSets = useSetStore.getState().sets;
 
-  let totalVol = 0;
-  let totalSets = 0;
-  let totalReps = 0;
+  let totalVol = 0,
+      totalSets = 0,
+      totalReps = 0;
 
   const summaryExercises: SummaryExercise[] = exercises.map((se) => {
-    const sets = allSets.filter(
-      (s: ExerciseSet) => s.session_exercise_id === se.id,
-    );
+    const sets = allSets.filter((s) => s.session_exercise_id === se.id);
 
-    const vol = sets.reduce(
-      (acc: number, s: ExerciseSet) => acc + (s.volume ?? 0),
+    const volTotal = sets.reduce(
+      (a, s) => a + (s.volume ?? s.reps * s.weight),
       0,
     );
-    const reps = sets.reduce(
-      (acc: number, s: ExerciseSet) => acc + s.reps,
-      0,
-    );
+    const repsTotal = sets.reduce((a, s) => a + s.reps, 0);
 
-    totalVol += vol;
+    totalVol  += volTotal;
     totalSets += sets.length;
-    totalReps += reps;
+    totalReps += repsTotal;
 
     return {
-      id: se.id,
+      sessionExerciseId: se.id,
+      exerciseId: se.exercise_id,
       name: se.name ?? 'Exercise',
-      volume: sets.length ? Math.round(vol / sets.length) : 0,
+      volume: sets.length ? volTotal / sets.length : 0,   // avg vol/set
       sets: sets.length,
-      reps: sets.length ? Math.round(reps / sets.length) : 0,
+      reps: repsTotal,
     };
   });
 
+  /* ------------- INSERT en exercise_workout_metrics ------------- */
+  if (online && userId && summaryExercises.length) {
+    const rows: ExerciseWorkoutMetricsInsert[] = summaryExercises.map((ex) => ({
+      user_id:            userId,
+      workout_session_id: workout.id,
+      exercise_id:        ex.exerciseId,
+      sets:               ex.sets,
+      reps:               ex.reps,
+      volume:             Math.round(ex.volume * ex.sets),        // total INT
+      kg_per_rep:         ex.reps ? (ex.volume * ex.sets) / ex.reps : 0,
+    }));
+
+    const { error } = await supabase
+      .from('exercise_workout_metrics')
+      .insert(rows);
+    if (error) console.error('[finishWorkout] insert metrics', error);
+  }
+
+  /* ---------------- resumen global ---------------- */
   const summary: WorkoutSummary = {
     duration: elapsedSec,
     totalVolume: totalVol,
@@ -220,9 +244,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     exercises: summaryExercises,
   };
 
-  if (timer) clearInterval(timer);
-  timer = null;
-
+  /* reset de estado */
   set({
     workout: null,
     exercises: [],
@@ -230,5 +252,5 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     running: false,
     workoutSummary: summary,
   });
-},
+}
 }));

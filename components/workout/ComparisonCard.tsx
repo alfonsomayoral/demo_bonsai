@@ -11,6 +11,7 @@ import {
   supabase,
   isSupabaseConfigured,
   ExerciseSet,
+  ExerciseWorkoutMetricsRow,
 } from '@/lib/supabase';
 import colors from '@/theme/colors';
 
@@ -19,41 +20,31 @@ interface Props {
   sessionExerciseId: string;
 }
 
-/* ────────── configuración de métricas ────────── */
-type MetricKey = 'volume' | 'sets' | 'reps' | 'kgPerRep';
+/* métrica → etiqueta + color */
+const cfg = {
+  sets:      { label: 'Sets',          color: '#FF2D8A' },
+  reps:      { label: 'Repetitions',   color: '#00FF61' },
+  volume:    { label: 'Volume (kg)',   color: '#32C5FF' },
+  kgPerRep:  { label: 'kg/rep',        color: '#FFCA1A' },
+} as const;
+type MetricKey = keyof typeof cfg;
+type Metric = { key: MetricKey; value: number; diff: number; pct: number };
 
-const metricCfg: Record<
-  MetricKey,
-  { label: string; color: string }
-> = {
-  sets: { label: 'Sets', color: '#FF2D8A' },
-  reps: { label: 'Repetitions', color: '#00FF61' },
-  volume: { label: 'Volume (kg)', color: '#32C5FF' },
-  kgPerRep: { label: 'kg/rep', color: '#FFCA1A' },
-};
-
-interface Metric {
-  key: MetricKey;
-  value: number;
-  diff: number;
-  pct: number;
-}
-
-export function ComparisonCard({
-  exerciseId,
-  sessionExerciseId,
-}: Props) {
+export function ComparisonCard({ exerciseId, sessionExerciseId }: Props) {
   const sets = useSetStore((s) => s.sets);
 
-  const [prev, setPrev] = useState<{
-    sets: number;
-    reps: number;
-    volume: number;
-    kgPerRep: number;
-  } | null>(null);
+  const [prev, setPrev] = useState<
+    | {
+        sets: number;
+        reps: number;
+        volume: number;
+        kgPerRep: number;
+      }
+    | null
+  >(null);
   const [loading, setLoading] = useState(true);
 
-  /* ────── cargar última sesión previa ────── */
+  /* ─── obtén la última métrica guardada (tabla nueva) ─── */
   useEffect(() => {
     (async () => {
       if (!isSupabaseConfigured()) {
@@ -68,60 +59,35 @@ export function ComparisonCard({
         return;
       }
 
-      /* último session_exercise distinto al actual */
-      const { data: seRows } = await supabase
-        .from('session_exercises')
-        .select('id, created_at')
-        .eq('exercise_id', exerciseId)
+      const { data, error } = await supabase
+        .from('exercise_workout_metrics')
+        .select('sets,reps,volume,kg_per_rep')
         .eq('user_id', uid)
-        .neq('id', sessionExerciseId)
+        .eq('exercise_id', exerciseId)
         .order('created_at', { ascending: false })
         .limit(1);
 
-      if (!seRows?.length) {
-        setLoading(false);
-        return;
+      if (error) console.error('[ComparisonCard] prev', error);
+
+      if (data && data.length) {
+        const row = data[0] as ExerciseWorkoutMetricsRow;
+        setPrev({
+          sets: row.sets,
+          reps: row.reps,
+          volume: row.volume,
+          kgPerRep: Number(row.kg_per_rep),
+        });
       }
-      const prevSE = seRows[0];
-
-      /* sets de esa sesión previa */
-      const { data: prevSets } = await supabase
-        .from('exercise_sets')
-        .select('*')
-        .eq('session_exercise_id', prevSE.id);
-
-      if (!prevSets?.length) {
-        setLoading(false);
-        return;
-      }
-
-      const setsCount = prevSets.length;
-      const repsTotal = prevSets.reduce(
-        (a, s: any) => a + s.reps,
-        0,
-      );
-      const volumeTotal = prevSets.reduce(
-        (a, s: any) => a + (s.volume ?? s.reps * s.weight),
-        0,
-      );
-
-      setPrev({
-        sets: setsCount,
-        reps: repsTotal,
-        volume: volumeTotal,
-        kgPerRep: repsTotal ? volumeTotal / repsTotal : 0,
-      });
       setLoading(false);
     })();
-  }, [exerciseId, sessionExerciseId]);
+  }, [exerciseId]);
 
-  /* ────── métricas actuales en tiempo real ────── */
+  /* ─── métricas actuales en tiempo real ─── */
   const cur = useMemo(() => {
     const curSets = sets.filter(
       (s) => s.session_exercise_id === sessionExerciseId,
     );
-
-    const setsCount = curSets.length;
+    const setCount = curSets.length;
     const repsTot = curSets.reduce((a, s) => a + s.reps, 0);
     const volTot = curSets.reduce(
       (a, s) => a + (s.volume ?? s.reps * s.weight),
@@ -129,20 +95,15 @@ export function ComparisonCard({
     );
 
     return {
-      sets: setsCount,
+      sets: setCount,
       reps: repsTot,
       volume: volTot,
       kgPerRep: repsTot ? volTot / repsTot : 0,
     };
   }, [sets, sessionExerciseId]);
 
-  /* ────── preparar datos para UI ────── */
-  const metrics: Metric[] = ([
-    'sets',
-    'reps',
-    'volume',
-    'kgPerRep',
-  ] as MetricKey[]).map((key) => {
+  /* ─── difs para UI ─── */
+  const metrics: Metric[] = (Object.keys(cfg) as MetricKey[]).map((key) => {
     const curVal = cur[key];
     const prevVal = prev ? prev[key] : 0;
     const diff = curVal - prevVal;
@@ -150,16 +111,16 @@ export function ComparisonCard({
     return { key, value: curVal, diff, pct };
   });
 
-  /* ────── UI Loading ────── */
+  /* ─── loading ─── */
   if (loading) {
     return (
-      <Card style={styles.loadingCard}>
+      <Card style={styles.loading}>
         <ActivityIndicator />
       </Card>
     );
   }
 
-  /* ────── UI Métricas ────── */
+  /* ─── render ─── */
   return (
     <Card style={styles.container}>
       <Text style={styles.title}>COMPARED TO PREVIOUS</Text>
@@ -167,21 +128,13 @@ export function ComparisonCard({
       <View style={styles.grid}>
         {metrics.map((m) => (
           <View key={m.key} style={styles.cell}>
-            {/* barra vertical */}
             <View
-              style={[
-                styles.bar,
-                { backgroundColor: metricCfg[m.key].color },
-              ]}
+              style={[styles.bar, { backgroundColor: cfg[m.key].color }]}
             />
-
-            {/* textos */}
             <View style={{ marginLeft: 8 }}>
-              <Text style={styles.label}>{metricCfg[m.key].label}</Text>
+              <Text style={styles.label}>{cfg[m.key].label}</Text>
               <Text style={styles.value}>
-                {m.key === 'kgPerRep'
-                  ? m.value.toFixed(2)
-                  : m.value}
+                {m.key === 'kgPerRep' ? m.value.toFixed(2) : m.value}
               </Text>
               <Text
                 style={[
@@ -199,9 +152,9 @@ export function ComparisonCard({
                   ? '—'
                   : `${m.diff > 0 ? '▲' : '▼'} ${Math.abs(
                       m.diff,
-                    ).toFixed(
-                      m.key === 'kgPerRep' ? 2 : 0,
-                    )} (${Math.abs(m.pct).toFixed(1)}%)`}
+                    ).toFixed(m.key === 'kgPerRep' ? 2 : 0)} (${Math.abs(
+                      m.pct,
+                    ).toFixed(1)}%)`}
               </Text>
             </View>
           </View>
@@ -211,22 +164,19 @@ export function ComparisonCard({
   );
 }
 
-/* ────────── estilos ────────── */
+/* ─── estilos ─── */
 const styles = StyleSheet.create({
-  loadingCard: { padding: 20, alignItems: 'center' },
+  loading: { padding: 20, alignItems: 'center' },
   container: {
     marginBottom: 16,
     padding: 16,
     backgroundColor: '#333',
-    borderWidth: 1,
-    borderColor: colors.primary,
     borderRadius: 12,
   },
   title: {
-    fontSize: 14,
-    color: colors.primary,
+    fontSize: 12,
+    color: colors.textSecondary,
     marginBottom: 8,
-    letterSpacing: 1,
   },
   grid: {
     flexDirection: 'row',
@@ -240,7 +190,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bar: { width: 6, height: 60, borderRadius: 3 },
-  label: { fontSize: 14, color: colors.textSecondary },
+  label: { fontSize: 12, color: colors.textSecondary },
   value: { fontSize: 16, fontWeight: '600', color: '#fff' },
   diff: { fontSize: 12 },
 });

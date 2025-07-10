@@ -314,6 +314,42 @@ export type Database = {
           order_idx?: number;
         };
       };
+
+      exercise_workout_metrics: {
+        Row: {
+          id: string;
+          user_id: string;
+          workout_session_id: string;
+          exercise_id: string;
+          sets: number;
+          reps: number;
+          volume: number;
+          kg_per_rep: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          workout_session_id: string;
+          exercise_id: string;
+          sets: number;
+          reps: number;
+          volume: number;
+          kg_per_rep: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          workout_session_id?: string;
+          exercise_id?: string;
+          sets?: number;
+          reps?: number;
+          volume?: number;
+          kg_per_rep?: number;
+          created_at?: string;
+        };
+      };
     };
 
     /*---------------------------------------------------------------------*/
@@ -352,7 +388,8 @@ export type Routine = Database['public']['Tables']['routines']['Row'];
 export type ExerciseSet = Database['public']['Tables']['exercise_sets']['Row'];
 export type SessionExercise = Database['public']['Tables']['session_exercises']['Row'];
 export type WorkoutSession = Database['public']['Tables']['workout_sessions']['Row'];
-export type DailyVolume = Database['public']['Views']['exercise_daily_volume']['Row'];
+export type ExerciseWorkoutMetricsRow = Database['public']['Tables']['exercise_workout_metrics']['Row'];
+export type ExerciseWorkoutMetricsInsert = Database['public']['Tables']['exercise_workout_metrics']['Insert'];
 
 /*─────────────────── Datos mock para dev/offline ─────────────────────────*/
 export const mockExercises: Exercise[] = [

@@ -44,13 +44,13 @@ export default function WorkoutSummaryScreen() {
         <Card style={styles.statsCard}>
           <View style={styles.statRow}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>
+              <Text style={styles.statValue1}>
                 {formatDuration(workoutSummary.duration)}
               </Text>
               <Text style={styles.statLabel}>Duration</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>
+              <Text style={styles.statValue2}>
                 {workoutSummary.totalVolume} kg
               </Text>
               <Text style={styles.statLabel}>Total Volume</Text>
@@ -58,11 +58,11 @@ export default function WorkoutSummaryScreen() {
           </View>
           <View style={styles.statRow}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{workoutSummary.totalSets}</Text>
+              <Text style={styles.statValue3}>{workoutSummary.totalSets}</Text>
               <Text style={styles.statLabel}>Sets</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>
+              <Text style={styles.statValue4}>
                 {workoutSummary.totalExercises}
               </Text>
               <Text style={styles.statLabel}>Exercises</Text>
@@ -74,7 +74,7 @@ export default function WorkoutSummaryScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Exercises</Text>
           {workoutSummary.exercises.map((ex: SummaryExercise) => (
-            <WorkoutSummaryCard key={ex.id} exercise={ex} />
+            <WorkoutSummaryCard key={ex.sessionExerciseId} exercise={ex} />
           ))}
         </View>
       </ScrollView>
@@ -83,7 +83,7 @@ export default function WorkoutSummaryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.background  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -94,20 +94,38 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: 'bold', color: colors.primary },
   content: { paddingHorizontal: 20, paddingBottom: 40 },
 
-  statsCard: { padding: 20, marginBottom: 24 },
+  statsCard: { padding: 20, marginBottom: 24, borderWidth: 2, borderColor: colors.primary, borderRadius: 16, backgroundColor: '#444' },
   statRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginBottom: 16,
   },
   stat: { alignItems: 'center' },
-  statValue: {
+  statValue1: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#32C5FF',
     marginBottom: 4,
   },
-  statLabel: { fontSize: 14, color: colors.textSecondary },
+  statValue2: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    color: colors.primary,
+  },
+  statValue3: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF2D8A',
+    marginBottom: 4,
+  },
+  statValue4: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFB347',
+    marginBottom: 4,
+  },
+  statLabel: { fontSize: 14, color: '#FFF', fontWeight: 'bold' },
 
   section: { marginBottom: 24 },
   sectionTitle: {
