@@ -161,7 +161,7 @@ export default function ExerciseInfoScreen() {
 /* ───── estilos ───── */
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: '#000' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

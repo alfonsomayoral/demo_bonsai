@@ -6,86 +6,67 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
+  Modal,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Search, ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Search, Filter } from 'lucide-react-native';
 
-import { useExerciseStore } from '@/store/exerciseStore';
-import { useRoutineStore } from '@/store/routineStore';
-import { useWorkoutStore } from '@/store/workoutStore';
+import ExerciseFilter from '@/components/workout/ExerciseFilter';
 import { Exercise } from '@/lib/supabase';
+import { useExerciseStore } from '@/store/exerciseStore';
 import colors from '@/theme/colors';
 
 export default function ExerciseSearchScreen() {
   const [query, setQuery] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const {
     exercises,
     loading,
     searchExercises,
-    addExerciseToRoutine,
+    muscles,
+    levels,
   } = useExerciseStore();
-  const { routines } = useRoutineStore();
-  const { workout, addExerciseToWorkout } = useWorkoutStore();
 
-  /* primera carga */
+  /* load & respond to filters */
   useEffect(() => {
-    searchExercises('');
-  }, []);
+    searchExercises(query.trim());
+  }, [muscles, levels]);
 
-  /* debounce búsqueda */
+  /* debounce text */
   useEffect(() => {
     const id = setTimeout(() => searchExercises(query.trim()), 300);
     return () => clearTimeout(id);
   }, [query]);
 
-  /*──────── handlers ────────*/
-  const goToExerciseDetail = (ex: Exercise) =>
-    router.push(`/workout/exercise/${ex.id}`);
-
-  const handleAddToRoutine = (ex: Exercise) => {
-    if (!routines.length) {
-      Alert.alert('No routines yet', 'Create a routine first.');
-      return;
-    }
-    Alert.alert(
-      'Add to routine',
-      `Choose a routine for "${ex.name}"`,
-      routines.map((rt) => ({
-        text: rt.name,
-        onPress: async () => {
-          try {
-            await addExerciseToRoutine(rt.id, ex.id);
-            Alert.alert('Added', `${ex.name} added to ${rt.name}`);
-          } catch (err) {
-            Alert.alert('Error', 'Could not add exercise.');
-          }
-        },
-      })),
-      { cancelable: true },
-    );
-  };
-
-  /*──────── item ────────*/
   const renderItem = ({ item }: { item: Exercise }) => (
-    <View style={styles.item}>
-      <Pressable onPress={() => goToExerciseDetail(item)} style={{ flex: 1 }}>
+    <Pressable
+      onPress={() => router.push(`/workout/exercise/${item.id}`)}
+      style={styles.item}>
+      <View>
         <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemMuscle}>{item.muscle_group}</Text>
-      </Pressable>
-
-      <Pressable onPress={() => handleAddToRoutine(item)} style={styles.addBtn}>
-        <Text style={styles.addBtnTxt}>Add to Routine</Text>
-      </Pressable>
-    </View>
+        <Text style={styles.itemSub}>{item.muscle_group}</Text>
+      </View>
+    </Pressable>
   );
 
-  /*──────── render ────────*/
   return (
     <SafeAreaView style={styles.container}>
+      {/* filter modal */}
+      <Modal
+        visible={filterOpen}
+        animationType="slide"
+        transparent
+        statusBarTranslucent>
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#0006' }}
+          onPress={() => setFilterOpen(false)}
+        />
+        <ExerciseFilter onClose={() => setFilterOpen(false)} />
+      </Modal>
+
       {/* header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()}>
@@ -95,23 +76,28 @@ export default function ExerciseSearchScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* search */}
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBar}>
+      {/* search row */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchBox}>
           <Search color="#8E8E93" size={18} />
           <TextInput
-            style={styles.searchInput}
+            style={styles.input}
             placeholder="Search exercises…"
             placeholderTextColor={colors.textSecondary}
             value={query}
             onChangeText={setQuery}
-            autoFocus
           />
         </View>
+
+        <Pressable
+          style={styles.filterBtn}
+          onPress={() => setFilterOpen(true)}>
+          <Filter color={colors.primary} size={20} />
+        </Pressable>
       </View>
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} size="large" />
+        <ActivityIndicator style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={exercises}
@@ -135,32 +121,35 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
-  searchWrap: { paddingHorizontal: 20, marginBottom: 12 },
-  searchBar: {
+
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  searchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1b1b1b',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  searchInput: { flex: 1, marginLeft: 8, fontSize: 16, color: colors.text },
-  list: { paddingHorizontal: 20, paddingBottom: 20 },
+  input: { flex: 1, marginLeft: 6, color: colors.text, fontSize: 15 },
+  filterBtn: {
+    marginLeft: 10,
+    padding: 10,
+    backgroundColor: '#1b1b1b',
+    borderRadius: 10,
+  },
+  list: { paddingHorizontal: 20, paddingBottom: 40 },
   item: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    paddingVertical: 12,
   },
-  itemName: { fontSize: 16, fontWeight: '600', color: colors.text },
-  itemMuscle: { fontSize: 13, fontStyle: 'italic', color: colors.textSecondary },
-  addBtn: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginLeft: 12,
-  },
-  addBtnTxt: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  itemName: { color: colors.text, fontWeight: '600', fontSize: 16 },
+  itemSub: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
 });

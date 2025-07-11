@@ -1,14 +1,18 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
+  Modal,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Plus, Search, Filter } from 'lucide-react-native';
+
+import ExerciseFilter from '@/components/workout/ExerciseFilter';
 import { Card } from '@/components/ui/Card';
 import { RoutineCarouselCard } from '@/components/workout/RoutineCarouselCard';
 import { MuscleAvatar } from '@/components/workout/MuscleAvatar';
@@ -20,79 +24,88 @@ import colors from '@/theme/colors';
 export default function WorkoutTab() {
   const { workout, createWorkout, elapsedSec } = useWorkoutStore();
   const { routines, loadRoutines } = useRoutineStore();
+  const [filterOpen, setFilterOpen] = useState(false);
 
-  /* ───── Cargar rutinas una sola vez ───── */
   useEffect(() => {
     loadRoutines();
   }, []);
 
-  /* ───── Fab main ───── */
-  const handleFabPress = async () => {
-    if (workout) {
-      router.push('./workout/ActiveWorkoutScreen');
-    } else {
-      createWorkout();
-      router.push('./workout/ActiveWorkoutScreen');
-    }
+  const handleFabPress = () => {
+    if (!workout) createWorkout();
+    router.push('./workout/ActiveWorkoutScreen');
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* filter modal */}
+      <Modal
+        visible={filterOpen}
+        animationType="slide"
+        transparent
+        statusBarTranslucent>
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#0006' }}
+          onPress={() => setFilterOpen(false)}
+        />
+        <ExerciseFilter
+          onClose={() => {
+            setFilterOpen(false);
+            router.push('./workout/ExerciseSearchScreen');
+          }}
+        />
+      </Modal>
+
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
+        {/* header */}
         <View style={styles.header}>
           <Text style={styles.title}>Workout</Text>
         </View>
 
-        {/* Search Bar */}
+        {/* search + filter */}
         <View style={styles.searchContainer}>
           <TouchableOpacity
             style={styles.searchBar}
-            onPress={() => router.push('./workout/ExerciseSearchScreen')}
-          >
+            onPress={() => router.push('./workout/ExerciseSearchScreen')}>
             <Search color="#8E8E93" size={20} />
-            <Text style={styles.searchPlaceholder}>Search exercises...</Text>
+            <Text style={styles.searchPlaceholder}>
+              Search exercises...
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.filterButton}>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => setFilterOpen(true)}>
             <Filter color={colors.primary} size={20} />
           </TouchableOpacity>
         </View>
 
-        {/* Routine Carousel */}
+        {/* routines, recovery, progress (sin cambios) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Routines</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.carousel}
-          >
-            {routines.map((routine) => (
+            contentContainerStyle={styles.carousel}>
+            {routines.map((rt) => (
               <RoutineCarouselCard
-                key={routine.id}
-                routine={routine}
-                onPress={() =>
-                  router.push(`./workout/routine/${routine.id}`)
-                }
+                key={rt.id}
+                routine={rt}
+                onPress={() => router.push(`./workout/routine/${rt.id}`)}
               />
             ))}
-
             <TouchableOpacity
               style={styles.addRoutineCard}
-              onPress={() => router.push('./workout/routine/create')}
-            >
+              onPress={() => router.push('./workout/routine/create')}>
               <Plus color={colors.primary} size={24} />
               <Text style={styles.addRoutineText}>Add Routine</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
 
-        {/* Muscle Avatar */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recovery</Text>
           <MuscleAvatar />
         </View>
 
-        {/* Progress Analysis */}
         <View style={styles.section}>
           <Card style={styles.progressCard}>
             <Text style={styles.cardTitle}>Progress Analysis</Text>
@@ -101,14 +114,15 @@ export default function WorkoutTab() {
         </View>
       </ScrollView>
 
-      {/* FAB */}
+      {/* fab */}
       <TouchableOpacity
         style={[styles.fab, workout && styles.fabActive]}
-        onPress={handleFabPress}
-      >
+        onPress={handleFabPress}>
         {workout ? (
           <View style={styles.fabContent}>
-            <Text style={styles.fabTimer}>{formatDuration(elapsedSec)}</Text>
+            <Text style={styles.fabTimer}>
+              {formatDuration(elapsedSec)}
+            </Text>
             <Text style={styles.fabLabel}>Resume</Text>
           </View>
         ) : (
@@ -119,14 +133,12 @@ export default function WorkoutTab() {
   );
 }
 
+/*──────── styles ────────*/
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-
-  /* Header */
-  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 },
+  header: { paddingHorizontal: 20, paddingVertical: 20 },
   title: { fontSize: 34, fontWeight: 'bold', color: colors.text },
 
-  /* Search */
   searchContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
@@ -152,12 +164,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  /* Sections */
   section: { paddingHorizontal: 20, marginBottom: 24 },
-  sectionTitle: { fontSize: 22, fontWeight: '600', color: colors.text, marginBottom: 16 },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 16,
+  },
   carousel: { paddingRight: 20, gap: 16 },
 
-  /* Routine addition */
   addRoutineCard: {
     backgroundColor: colors.card,
     borderRadius: 12,
@@ -168,14 +183,21 @@ const styles = StyleSheet.create({
     height: 120,
     gap: 8,
   },
-  addRoutineText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
+  addRoutineText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
 
-  /* Placeholder card */
   progressCard: { height: 120, justifyContent: 'center' },
-  cardTitle: { fontSize: 18, fontWeight: '600', color: colors.text, marginBottom: 4 },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
   cardSubtitle: { fontSize: 14, color: colors.textSecondary },
 
-  /* FAB */
   fab: {
     position: 'absolute',
     bottom: 30,
@@ -186,11 +208,6 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   fabActive: { width: 120, height: 60, borderRadius: 30 },
   fabContent: { alignItems: 'center' },

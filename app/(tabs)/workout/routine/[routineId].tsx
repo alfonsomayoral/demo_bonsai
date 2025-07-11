@@ -11,8 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 
-import { supabase } from '@/lib/supabase';
-import { Exercise } from '@/lib/supabase';
+import { supabase, Exercise } from '@/lib/supabase';
+import { Card } from '@/components/ui/Card';
 import colors from '@/theme/colors';
 
 export default function RoutineScreen() {
@@ -22,7 +22,7 @@ export default function RoutineScreen() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
 
-  /* fetch */
+  /* ─────── fetch rutina + ejercicios ─────── */
   useEffect(() => {
     (async () => {
       /* nombre rutina */
@@ -50,19 +50,23 @@ export default function RoutineScreen() {
     })();
   }, [routineId]);
 
+  /* ─────── render card ─────── */
   const renderItem = ({ item }: { item: Exercise }) => (
-    <Pressable
-      style={styles.card}
-      onPress={() => router.push(`/workout/exercise/${item.id}`)}
-    >
-      <Text style={styles.cardTitle}>{item.name}</Text>
-      <Text style={styles.cardSubtitle}>{item.muscle_group}</Text>
+    <Pressable onPress={() => router.push(`/workout/exercise/${item.id}`)}>
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>{item.name}</Text>
+        <Text style={styles.cardSubtitle}>{item.muscle_group}</Text>
+      </Card>
     </Pressable>
   );
 
   const handleAddExercise = () =>
-    router.push({ pathname: './workout/ExerciseSearch', params: { routineId } });
+    router.push({
+      pathname: './workout/ExerciseSearch',
+      params: { routineId },
+    });
 
+  /* ─────── UI ─────── */
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
@@ -73,15 +77,16 @@ export default function RoutineScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* header */}
+      {/* ── header ── */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()}>
           <ArrowLeft color={colors.primary} size={24} />
         </Pressable>
         <Text style={styles.headerTitle}>{routineName}</Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 24 }} /> {/* placeholder para centrar */}
       </View>
 
+      {/* ── lista de ejercicios ── */}
       <FlatList
         data={exercises}
         keyExtractor={(e) => e.id}
@@ -89,6 +94,7 @@ export default function RoutineScreen() {
         contentContainerStyle={styles.list}
       />
 
+      {/* ── botón añadir ── */}
       <Pressable style={styles.addBtn} onPress={handleAddExercise}>
         <Text style={styles.addBtnTxt}>Add Exercise</Text>
       </Pressable>
@@ -96,10 +102,11 @@ export default function RoutineScreen() {
   );
 }
 
-/*──────── styles ────────*/
+/*────────────────── styles ──────────────────*/
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: '#000' },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -107,19 +114,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: colors.text },
+
   list: { paddingHorizontal: 20, paddingBottom: 20 },
+
+  /* tarjeta */
   card: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    paddingVertical: 14,
+    marginBottom: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    backgroundColor: '#666',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
+  cardTitle: { fontSize: 16, fontWeight: '600', color: '#fff', },
   cardSubtitle: {
     fontSize: 13,
     fontStyle: 'italic',
-    color: colors.textSecondary,
+    color: colors.primary,
+    marginTop: 2,
   },
+
+  /* botón add */
   addBtn: {
     backgroundColor: colors.success,
     margin: 20,
@@ -127,5 +144,5 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
   },
-  addBtnTxt: { color: '#fff', fontWeight: '600' },
+  addBtnTxt: { color: '#fff', fontWeight: '800' },
 });

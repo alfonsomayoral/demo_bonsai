@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
+  TextInput,
   FlatList,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
+  Modal,
+  Pressable,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Search, Info, Plus } from 'lucide-react-native';
+import { ArrowLeft, Search, Info, Plus, Filter } from 'lucide-react-native';
 
+import ExerciseFilter from '@/components/workout/ExerciseFilter';
 import { Card } from '@/components/ui/Card';
 import { useExerciseStore } from '@/store/exerciseStore';
 import { useWorkoutStore } from '@/store/workoutStore';
@@ -19,70 +22,63 @@ import { Exercise } from '@/lib/supabase';
 import colors from '@/theme/colors';
 
 export default function ExercisePickerScreen() {
-  /* ---------- stores ---------- */
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const { exercises, loading, searchExercises } = useExerciseStore();
+  const [query, setQuery] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const {
+    exercises,
+    loading,
+    searchExercises,
+    muscles,
+    levels,
+  } = useExerciseStore();
   const { createWorkout, addExerciseToWorkout } = useWorkoutStore();
-
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  /* ---------- efectos ---------- */
-  /* 1. traer lista completa al montar */
+  /* initial & filter change */
   useEffect(() => {
-    searchExercises('');
-  }, []);
+    searchExercises(query.trim());
+  }, [muscles, levels]);
 
-  /* 2. filtrar en tiempo real */
+  /* text debounce */
   useEffect(() => {
-    if (searchQuery.trim()) searchExercises(searchQuery.trim());
-    else searchExercises(''); // ← muestra todo si input vacío
-  }, [searchQuery]);
+    const id = setTimeout(() => searchExercises(query.trim()), 250);
+    return () => clearTimeout(id);
+  }, [query]);
 
-  /* ---------- helpers ---------- */
   const handleAdd = async (ex: Exercise) => {
     setLoadingId(ex.id);
-
     try {
-      /* crea sesión si no existe */
       if (!useWorkoutStore.getState().workout) await createWorkout();
-
-      /* inserta / recupera id de session_exercises */
-      const sessId = await addExerciseToWorkout({
+      const sid = await addExerciseToWorkout({
         id: ex.id,
         name: ex.name,
         muscle_group: ex.muscle_group,
       });
-
-      if (!sessId) throw new Error('Could not add exercise');
-      router.replace(`/workout/exercise/session/${sessId}`);
-    } catch (e) {
-      console.error(e);
+      if (!sid) throw new Error();
+      router.replace(`/workout/exercise/session/${sid}`);
+    } catch {
       alert('Error adding exercise');
     } finally {
       setLoadingId(null);
     }
   };
 
-  const handleInfo = (ex: Exercise) => router.push(`/workout/exercise/${ex.id}`);
-
-  /* ---------- render ---------- */
   const renderItem = ({ item }: { item: Exercise }) => (
     <Card style={styles.exerciseCard}>
       <View style={styles.exerciseInfo}>
         <Text style={styles.exerciseName}>{item.name}</Text>
         <Text style={styles.exerciseMuscle}>{item.muscle_group}</Text>
       </View>
-
       <View style={styles.buttons}>
-        <TouchableOpacity onPress={() => handleInfo(item)} style={styles.iconBtn}>
+        <TouchableOpacity
+          onPress={() => router.push(`/workout/exercise/${item.id}`)}
+          style={styles.iconBtn}>
           <Info color={colors.primary} size={20} />
         </TouchableOpacity>
-
         <TouchableOpacity
           onPress={() => handleAdd(item)}
           style={[styles.iconBtn, styles.addBtn]}
-          disabled={loadingId === item.id}
-        >
+          disabled={loadingId === item.id}>
           {loadingId === item.id ? (
             <ActivityIndicator size={16} color="#fff" />
           ) : (
@@ -95,6 +91,19 @@ export default function ExercisePickerScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* modal filter */}
+      <Modal
+        visible={filterOpen}
+        animationType="slide"
+        transparent
+        statusBarTranslucent>
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#0006' }}
+          onPress={() => setFilterOpen(false)}
+        />
+        <ExerciseFilter onClose={() => setFilterOpen(false)} />
+      </Modal>
+
       {/* header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
@@ -104,39 +113,40 @@ export default function ExercisePickerScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* search */}
-      <View style={styles.searchContainer}>
+      {/* search row */}
+      <View style={styles.searchRow}>
         <View style={styles.searchBar}>
           <Search color="#8E8E93" size={20} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search exercises…"
             placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+            value={query}
+            onChangeText={setQuery}
           />
         </View>
+        <TouchableOpacity
+          style={styles.filterBtn}
+          onPress={() => setFilterOpen(true)}>
+          <Filter color={colors.primary} size={20} />
+        </TouchableOpacity>
       </View>
 
-      {/* list */}
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={exercises}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(it) => it.id}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <Text style={styles.emptyTxt}>No exercises found</Text>
-          }
         />
       )}
     </SafeAreaView>
   );
 }
 
-/* ---------- styles ---------- */
+/* styles igual que antes, con filterBtn añadido */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
@@ -148,8 +158,15 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '600', color: colors.text },
 
-  searchContainer: { paddingHorizontal: 20, marginTop: 12 },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    gap: 12,
+    marginTop: 12,
+  },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
@@ -158,21 +175,35 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   searchInput: { flex: 1, fontSize: 16, color: colors.text },
-  list: { paddingHorizontal: 20, paddingVertical: 20 },
-  emptyTxt: { textAlign: 'center', marginTop: 24, color: colors.textSecondary },
+  filterBtn: {
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
+  list: { paddingHorizontal: 20, paddingVertical: 20 },
   exerciseCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 16,
     borderRadius: 12,
-    backgroundColor: '#333333',
+    backgroundColor: '#333',
     marginBottom: 12,
   },
   exerciseInfo: { flex: 1 },
-  exerciseName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  exerciseMuscle: { fontSize: 13, fontStyle: 'italic', color: colors.textSecondary },
-
+  exerciseName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  exerciseMuscle: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: colors.textSecondary,
+  },
   buttons: { flexDirection: 'row', gap: 8, marginLeft: 12 },
   iconBtn: {
     padding: 8,
