@@ -62,7 +62,7 @@ export default function RoutineScreen() {
 
   const handleAddExercise = () =>
     router.push({
-      pathname: './workout/ExerciseSearch',
+      pathname: '/workout/ExerciseSearchScreen',
       params: { routineId },
     });
 
