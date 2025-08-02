@@ -202,7 +202,7 @@ export type Database = {
           user_id: string;
           order_idx: number;
           created_at: string;
-          name: string | null;          
+          name: string | null;
           muscle_group: string | null;
         };
         Insert: {
@@ -212,7 +212,7 @@ export type Database = {
           user_id: string;
           order_idx: number;
           created_at?: string;
-          name?: string | null;          
+          name?: string | null;
           muscle_group?: string | null;
         };
         Update: {
@@ -222,7 +222,7 @@ export type Database = {
           user_id?: string;
           order_idx?: number;
           created_at?: string;
-          name?: string | null;         
+          name?: string | null;
           muscle_group?: string | null;
         };
       };
@@ -237,7 +237,7 @@ export type Database = {
           rpe: number | null;
           volume: number | null;
           performed_at: string;
-          created_at: string;          // ← añadido
+          created_at: string;
         };
         Insert: {
           id?: string;
@@ -247,7 +247,7 @@ export type Database = {
           performed_at?: string;
           rpe?: number | null;
           volume?: number | null;
-          created_at?: string;         // ← añadido
+          created_at?: string;
         };
         Update: {
           id?: string;
@@ -257,10 +257,9 @@ export type Database = {
           performed_at?: string;
           rpe?: number | null;
           volume?: number | null;
-          created_at?: string;         // ← añadido
+          created_at?: string;
         };
       };
-
 
       /*────────────────────────────── routines ────────────────────────────*/
       routines: {
@@ -315,6 +314,7 @@ export type Database = {
         };
       };
 
+      /*───────────────────── exercise_workout_metrics ─────────────────────*/
       exercise_workout_metrics: {
         Row: {
           id: string;
@@ -357,7 +357,7 @@ export type Database = {
       exercise_daily_volume: {
         Row: {
           exercise_id: string;
-          work_date: string;       // YYYY-MM-DD
+          work_date: string;
           total_volume: number;
           user_id: string;
         };
@@ -368,7 +368,7 @@ export type Database = {
     Functions: {
       get_last_worked_at: {
         Args: { p_muscle: string };
-        Returns: string | null;    // timestamptz ISO
+        Returns: string | null;
       };
     };
 
@@ -423,4 +423,58 @@ export const mockWorkoutSession: WorkoutSession = {
   finished_at: null,
   duration_sec: null,
   total_volume: 0,
+};
+
+/*─────────────────── Helpers Fase 1 ─────────────────────────*/
+
+/**
+ * Sube una imagen al bucket `meal-images` y devuelve la URL pública
+ */
+export const uploadMealImage = async (
+  userId: string,
+  fileUri: string,
+  mealLabel: 'breakfast' | 'lunch' | 'dinner' | 'snack' = 'snack'
+): Promise<string | null> => {
+  try {
+    // React Native / Expo permite fetch(uri) -> blob
+    const res = await fetch(fileUri);
+    const blob = await res.blob();
+
+    const day = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+    const uuid = crypto.randomUUID();
+    const fileName = `${userId}/${day}-${mealLabel}-${uuid}.jpg`;
+
+    const { error } = await supabase.storage
+      .from('meal-images')
+      .upload(fileName, blob, {
+        contentType: 'image/jpeg',
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from('meal-images')
+      .getPublicUrl(fileName);
+
+    return data.publicUrl;
+  } catch (err) {
+    console.error('uploadMealImage', err);
+    return null;
+  }
+};
+
+/**
+ * Invoca la Edge Function `analyze-food`
+ */
+export const analyzeFoodImage = async (
+  imageUrl: string,
+  userId: string,
+  fixPrompt?: string
+): Promise<any> => {
+  const { data, error } = await supabase.functions.invoke('analyze-food', {
+    body: { imageUrl, userId, fixPrompt },
+  });
+  if (error) throw error;
+  return data;
 };
