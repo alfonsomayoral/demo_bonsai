@@ -45,7 +45,6 @@
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "^0.20.0",
     "react-native-webview": "13.13.5",
-    "supabase": "^2.26.9",
     "uuid": "^11.1.0",
     "zustand": "^5.0.5"
   },
@@ -55,6 +54,7 @@
     "babel-preset-expo": "^13.2.1",
     "expo-router": "^5.1.0",
     "react-native-reanimated": "^3.18.0",
+    "supabase": "^2.33.9",
     "typescript": "~5.8.3"
   },
   "packageManager": "pnpm@8.15.0+sha512.ea45517d5285d123eac02c3793505fa1fd6da90a2fc60d1e8d9e0c1e9292886ecfaff513f062b9d1cc8021bb8615033b1ac5bea3b2ee3fc165a6d7034bbe6b03"

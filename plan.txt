@@ -1,0 +1,129 @@
+Plan unificado 🚀
+He cruzado punto por punto tu plan original y el que te pasó el otro ingeniero para sacar una única estrategia que maximiza :
+
+Precisión y flexibilidad (GPT-4o Vision + opción de fallback)
+
+UX suave (cámara nativa, loaders y correcciones rápidas)
+
+Seguridad/coste (Edge Function + Storage público controlado)
+
+Mantenibilidad (nueva capa de estado aislada y rutas claramente acotadas)
+
+A continuación te dejo la versión fusionada.
+
+1 · Mapa de pantallas & navegación
+Ruta Expo Router	Componente	Descripción	Nuevo/Mod
+(tabs)/nutrition.tsx	NutritionHome	DailyProgress + RecentFoods + botón Take Photo	Mod.
+(tabs)/nutrition/capture.tsx	CaptureScreen	Cámara a fullscreen, compresión y subida.	Nuevo
+(tabs)/nutrition/analyzing.tsx	AnalyzingScreen	Spinner + texto; se cierra en cuanto llega IA.	Nuevo
+(tabs)/nutrition/review/[draftId].tsx	MealReviewScreen	Banner foto, cards macros, ConfidenceBar, Save /Fix⭐.	Nuevo
+(tabs)/nutrition/meal/[mealId].tsx	MealDetailScreen	Modo lectura de un meal guardado.	Nuevo
+
+2 · Componentes reutilizables
+Componente	Carpeta	Uso
+NutrientCard	components/nutrition	Calorías/Macros individuales
+ConfidenceBar	components/nutrition	Escala 1–10 con color gradiente
+FoodItemCard	components/nutrition	Listado de cada ingrediente
+FoodAnalysisCard (opcional)	components/nutrition	Agrupa foto + resumen para RecentFoods
+
+Todos con estilo coherente a tu theme/colors.ts (borde 2xl, sombras suaves, padding ≥ p-2).
+
+3 · Estado global & hooks
+store/nutritionStore.ts (ya esbozado en la propuesta del ingeniero; lo mantenemos).
+
+Añadir selector draftId para mapear la ruta [draftId].tsx.
+
+hooks/useMealsToday.ts
+
+Lee meals de hoy, devuelve totales y lista, refrescando con un subscribe de Supabase Realtime.
+
+hooks/useUploadImage.ts
+
+Abstracción para subir y obtener publicUrl, reutilizable en otros flujos futuros.
+
+4 · Pipeline técnico
+scss
+Copiar
+Editar
+Camera → uploadMealImage() ─┐
+                            ├─ Edge Function analyze-food → GPT-4o Vision
+            Fix⭐ (texto) ───┘
+Captura & compresión
+
+expo-camera + expo-image-manipulator → JPEG ~1 MB, máx 1280 px.
+
+Subida
+
+Bucket meal-images, path {userId}/{yyyy-mm-dd}-{uuid}.jpg.
+
+Política RLS: insert / delete sólo dueño, select pública.
+
+Edge Function analyze-food
+
+Versión del ingeniero + pequeños ajustes:
+
+Forzamos temperature: 0.2 para consistencia.
+
+Limitamos max_tokens a 800.
+
+Añadimos guardia if (!content.startsWith('{')) → re-prompt con “Return JSON only”.
+
+Draft en Client
+
+Guardamos análisis en nutritionStore.currentAnalysis + draftId (uuid).
+
+Pantalla Review
+
+Muestra macros y barra de confianza (confidence*10).toFixed(1).
+
+Save → inserta meals + meal_items + actualiza image_path.
+
+Fix⭐ → abre modal → llama analyze-food con fixPrompt → reemplaza análisis.
+
+Actualización en vivo
+
+Hook useMealsToday notificado → refresca DailyProgress y RecentFoods.
+
+5 · Modelo IA & costes
+Modelo	€/1 k imágenes*	Latencia	Precisión (macro)	Notas
+GPT-4o Vision	≈ 3 €	5-9 s	88-92 %	Prompt ajustable, JSON directo
+Calorie Mama	≈ 2 €	1-2 s	85-88 %	Fallback si coste sube
+Cloud Vision + Gemini	≈ 1 €	4-6 s	82-87 %	Pipeline doble, más código
+
+* Incluye tokens texto promedio (≈ 700 tok).
+
+Estrategia : producción inicial con GPT-4o; métrica “coste por comida” monitorizada → si supera 0 .025 €, enrutar a Calorie Mama y reservar GPT-4o para correcciones Fix⭐.
+
+6 · Infraestructura (Fase 1 fusionada)
+Los pasos CLI detallados por el ingeniero se mantienen; añadimos:
+
+Rate limit en Edge Function (60 rpm) con tabla KV en Postgres.
+
+Logging: cada llamada inserta en food_analysis_logs (user_id, latency_ms, model, cost_usd).
+
+7 · Plan de trabajo consolidado
+Fase	Horas	Entregables
+1. Infra + Edge Function	10	Bucket, policy, CLI deploy, logging & tests script
+2. Estado & Hooks	6	nutritionStore, useMealsToday, useUploadImage
+3. Captura & Análisis	12	capture.tsx, analyzing.tsx, flujo subida + draft
+4. UI/UX Review & Detail	14	MealReviewScreen, modal Fix, MealDetailScreen, componentes
+5. Home redesign	6	Refactor nutrition.tsx (DailyProgress, RecentFoods)
+6. Persistencia & Realtime	4	Inserción meals/items, live refresh, error handling
+7. QA + Edge cases	6	Permisos cámara, offline, timeouts, fallback Calorie Mama
+Total	≈ 58 h	
+
+8 · Riesgos y mitigaciones
+Riesgo	Mitigación
+Estimación peso imprecisa	Mostrar confianza, botón Fix⭐, logging para prompt tuning
+Coste IA se dispare	Umbral coste → fallback, cron job para email reporte mensual
+Latencia Edge > 10 s	Skeleton loader + cancel; compresión < 1 MB
+Usuario sin conexión	Guardar foto local (FileSystem) y re-intentar cuando vuelva online
+
+9 · Próximos pasos
+Confirmar que este plan consolidado cubre todos tus requisitos.
+
+Bloquear el nombre final de las rutas (para evitar refactors).
+
+Yo generaré todos los archivos de código (pantallas, componentes, hook, store y función Deno) listos para copiar-pegar, siguiendo tu estructura de proyecto.
+
+Cuando me des luz verde 👍, pasaré a escribir los archivos con su contenido completo.
