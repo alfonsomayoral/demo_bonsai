@@ -127,3 +127,5 @@ Bloquear el nombre final de las rutas (para evitar refactors).
 Yo generaré todos los archivos de código (pantallas, componentes, hook, store y función Deno) listos para copiar-pegar, siguiendo tu estructura de proyecto.
 
 Cuando me des luz verde 👍, pasaré a escribir los archivos con su contenido completo.
+
+
