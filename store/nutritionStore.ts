@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase, uploadMealImage, analyzeFoodImage } from '@/lib/supabase';
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
 
 type Totals = { calories: number; protein: number; carbs: number; fat: number };
 interface FoodItem { name: string; weight_g: number; calories: number; protein: number; carbs: number; fat: number; confidence: number }
@@ -21,31 +23,33 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
   isAnalyzing: false,
   error: null,
 
-  analyzeNewPhoto: async (fileUri) => {
+  analyzeNewPhoto: async (fileUri: string) => {
     set({ isAnalyzing: true, error: null });
+  
     try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
-
-      // 1. Subir la imagen
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+  
+      // 1· Upload
       const imageUrl = await uploadMealImage(user.id, fileUri, 'snack');
-      if (!imageUrl) throw new Error('Upload failed');
-
-      // 2. Llamar a la función Edge
-      const result = await analyzeFoodImage(imageUrl, user.id);
-      if (!result.success) throw new Error(result.error);
-
-      // 3. Guardar draft
-      const draftId = crypto.randomUUID();
+      if (!imageUrl) throw new Error('Image upload failed');
+  
+      // 2· IA
+      const { success, analysis, error } = await analyzeFoodImage(imageUrl, user.id);
+      if (!success) throw new Error(error ?? 'Edge-function error');
+  
+      // 3· Persistir en store
+      const draftId = crypto.randomUUID?.() || uuidv4();   // use polyfill si hace falta
       set({
         draftId,
-        draft: { imageUrl, ...result.analysis },
+        draft: { imageUrl, ...analysis },
         isAnalyzing: false,
       });
-      return draftId;
+  
+      return draftId;                     // <-  Devuelve SIEMPRE string
     } catch (e: any) {
       set({ isAnalyzing: false, error: e.message });
-      return null;
+      return null;                        //   null sólo si hubo catch
     }
   },
 

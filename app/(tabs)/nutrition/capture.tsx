@@ -32,6 +32,7 @@ export default function CaptureScreen() {
   const [mode, setMode] = useState<Mode>('photo');
   const router = useRouter();
   const analyzeNewPhoto = useNutritionStore((s) => s.analyzeNewPhoto);
+  const [isCameraReady, setIsCameraReady] = useState(false);
 
   /* permiso */
   if (!permission?.granted) {
@@ -65,19 +66,28 @@ export default function CaptureScreen() {
   };
 
   const takeShot = async () => {
-    // `takePhoto` existe en runtime pero aún no está tipado
+    if (!isCameraReady) return;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    const photo = await (cameraRef.current as any)?.takePhoto({
-      skipMetadata: true,
-    });
-    if (photo?.uri) processImage(photo.uri);
+    const photo = await (cameraRef.current as any)?.takePhoto({ skipMetadata: true });
+    const localPath = photo?.path ?? photo?.uri;   // compat ambas keys
+    if (localPath) processImage(localPath);
   };
 
-  const processImage = async (uri: string) => {
-    const compressed = await compress(uri);
-    router.replace('./nutrition/analyzing');
-    const id = await analyzeNewPhoto(compressed);
-    router.replace(`./nutrition/review/${id}`);
+  const processImage = async (localPath: string) => {
+    router.replace('./nutrition/analyzing');      // muévete YA
+    try {
+      const compressed = await compress(localPath);
+      const id = await analyzeNewPhoto(compressed); // sube + IA
+
+      if (!id) {                                     // 3· Si vuelve null -> error controlado
+        throw new Error('No draft created');
+      }
+
+      router.replace(`./nutrition/review/${id}`);   
+    } catch (err) {
+      router.back();           // vuelve a Capture si algo falla
+      alert((err as Error).message ?? 'Error analysing food');
+    }
   };
 
   /* corner styles */
@@ -96,6 +106,7 @@ export default function CaptureScreen() {
         style={styles.camera}
         facing="back"
         flash={flash}
+        onCameraReady={() => setIsCameraReady(true)}
       />
 
       {/* marco */}

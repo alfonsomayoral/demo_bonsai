@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/consistent-type-definitions */
 import { createClient } from '@supabase/supabase-js';
+import { v4 as uuid } from 'uuid';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -432,32 +433,34 @@ export const mockWorkoutSession: WorkoutSession = {
  */
 export const uploadMealImage = async (
   userId: string,
-  fileUri: string,
-  mealLabel: 'breakfast' | 'lunch' | 'dinner' | 'snack' = 'snack'
+  imageUri: string,
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack'
 ): Promise<string | null> => {
   try {
-    // React Native / Expo permite fetch(uri) -> blob
-    const res = await fetch(fileUri);
-    const blob = await res.blob();
+    // ① convertir URI a blob
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
 
-    const day = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
-    const uuid = crypto.randomUUID();
-    const fileName = `${userId}/${day}-${mealLabel}-${uuid}.jpg`;
+    // ② nombre único     ⟵ antes usaba crypto.randomUUID()
+    const timestamp = new Date().toISOString().split('T')[0];
+    const fileName   = `${userId}/${timestamp}-${mealType}-${uuid()}.jpg`;
 
+    // ③ upload
     const { error } = await supabase.storage
       .from('meal-images')
       .upload(fileName, blob, {
         contentType: 'image/jpeg',
-        upsert: false,
+        cacheControl: '3600',
+        upsert: true,
       });
-
     if (error) throw error;
 
-    const { data } = supabase.storage
+    // ④ URL pública
+    const { data: { publicUrl } } = supabase.storage
       .from('meal-images')
       .getPublicUrl(fileName);
 
-    return data.publicUrl;
+    return publicUrl;
   } catch (err) {
     console.error('uploadMealImage', err);
     return null;
