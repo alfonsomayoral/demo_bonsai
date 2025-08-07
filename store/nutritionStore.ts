@@ -1,3 +1,4 @@
+// store/nutritionStore.ts  — fragmento relevante
 import { create } from 'zustand';
 import { supabase, uploadMealImage, analyzeFoodImage } from '@/lib/supabase';
 import 'react-native-get-random-values';
@@ -18,54 +19,55 @@ interface NutritionState {
 }
 
 export const useNutritionStore = create<NutritionState>((set, get) => ({
-  draftId: null,
-  draft: null,
-  isAnalyzing: false,
-  error: null,
+  draftId : null,
+  draft   : null,
+  isAnalyzing : false,
+  error   : null,
 
+  /* ---------------------- capturar y analizar ---------------------- */
   analyzeNewPhoto: async (fileUri: string) => {
     set({ isAnalyzing: true, error: null });
-  
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
-  
-      // 1· Upload
+
+      /* 1· subir imagen */
       const imageUrl = await uploadMealImage(user.id, fileUri, 'snack');
       if (!imageUrl) throw new Error('Image upload failed');
-  
-      // 2· IA
+
+      /* 2· llamar función Edge */
       const { success, analysis, error } = await analyzeFoodImage(imageUrl, user.id);
       if (!success) throw new Error(error ?? 'Edge-function error');
-  
-      // 3· Persistir en store
-      const draftId = crypto.randomUUID?.() || uuidv4();   // use polyfill si hace falta
+
+      /* 3· guardar en el store */
+      const draftId = crypto.randomUUID?.() || uuidv4();
       set({
         draftId,
-        draft: { imageUrl, ...analysis },
+        draft: { imageUrl, ...analysis },   // ← FIX aquí
         isAnalyzing: false,
       });
-  
-      return draftId;                     // <-  Devuelve SIEMPRE string
+      return draftId;
     } catch (e: any) {
       set({ isAnalyzing: false, error: e.message });
-      return null;                        //   null sólo si hubo catch
+      return null;
     }
   },
 
+  /* --------------------------- re-analizar ------------------------- */
   fixDraft: async (text) => {
     const { draft, draftId } = get();
     if (!draft || !draftId) return;
+
     set({ isAnalyzing: true, error: null });
     try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-      const result = await analyzeFoodImage(draft.imageUrl, user.id, text);
-      if (!result.success) throw new Error(result.error);
+      const { success, analysis, error } = await analyzeFoodImage(draft.imageUrl, user.id, text);
+      if (!success) throw new Error(error ?? 'Edge-function error');
 
       set({
-        draft: { imageUrl: draft.imageUrl, ...result.analysis },
+        draft: { imageUrl: draft.imageUrl, ...analysis },   // ← y aquí
         isAnalyzing: false,
       });
     } catch (e: any) {

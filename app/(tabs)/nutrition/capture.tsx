@@ -25,16 +25,17 @@ const FRAME_SIZE = width * 0.7;
 type Mode = 'photo' | 'barcode' | 'label' | 'library';
 
 export default function CaptureScreen() {
-  /* refs & state */
-  const cameraRef = useRef<CameraView>(null);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [flash, setFlash] = useState<FlashMode>('off');
-  const [mode, setMode] = useState<Mode>('photo');
-  const router = useRouter();
-  const analyzeNewPhoto = useNutritionStore((s) => s.analyzeNewPhoto);
+  /* refs & state --------------------------------------------------- */
+  const cameraRef                         = useRef<CameraView>(null);
+  const [permission, requestPermission]   = useCameraPermissions();
+  const [flash, setFlash]                 = useState<FlashMode>('off');
+  const [mode, setMode]                   = useState<Mode>('photo');
   const [isCameraReady, setIsCameraReady] = useState(false);
 
-  /* permiso */
+  const router           = useRouter();
+  const analyzeNewPhoto  = useNutritionStore((s) => s.analyzeNewPhoto);
+
+  /* permisos ------------------------------------------------------- */
   if (!permission?.granted) {
     return (
       <View style={styles.permissionScreen}>
@@ -46,7 +47,7 @@ export default function CaptureScreen() {
     );
   }
 
-  /* helpers */
+  /* helpers -------------------------------------------------------- */
   const compress = async (uri: string) => {
     const { uri: out } = await ImageManipulator.manipulateAsync(
       uri,
@@ -59,7 +60,7 @@ export default function CaptureScreen() {
   const handleLibrary = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.9,
+      quality:    0.9,
     });
     if (res.canceled) return;
     processImage(res.assets[0].uri);
@@ -73,24 +74,26 @@ export default function CaptureScreen() {
     if (localPath) processImage(localPath);
   };
 
+  /* flujo principal ------------------------------------------------ */
   const processImage = async (localPath: string) => {
-    router.replace('./nutrition/analyzing');      // muévete YA
+    router.replace('./analyzing');                // pantalla de loading
+
     try {
       const compressed = await compress(localPath);
-      const id = await analyzeNewPhoto(compressed); // sube + IA
+      console.log('DBG compressedPath', compressed);   // <-- trazas
+      const id = await analyzeNewPhoto(compressed);
+      console.log('DBG returned draftId', id);
 
-      if (!id) {                                     // 3· Si vuelve null -> error controlado
-        throw new Error('No draft created');
-      }
+      if (!id) throw new Error('No draft created');
 
-      router.replace(`./nutrition/review/${id}`);   
+      router.replace(`./review/${id}`);           // pantalla de resumen
     } catch (err) {
-      router.back();           // vuelve a Capture si algo falla
+      router.back();                            // vuelve a Capture
       alert((err as Error).message ?? 'Error analysing food');
     }
   };
 
-  /* corner styles */
+  /* estilos marco -------------------------------------------------- */
   const cornerMap: Record<'tl' | 'tr' | 'bl' | 'br', StyleProp<ViewStyle>> = {
     tl: styles.corner_tl,
     tr: styles.corner_tr,
@@ -98,7 +101,7 @@ export default function CaptureScreen() {
     br: styles.corner_br,
   };
 
-  /* UI */
+  /* UI ------------------------------------------------------------- */
   return (
     <View style={styles.container}>
       <CameraView
@@ -109,7 +112,7 @@ export default function CaptureScreen() {
         onCameraReady={() => setIsCameraReady(true)}
       />
 
-      {/* marco */}
+      {/* marco visual */}
       <View style={styles.frame}>
         {(['tl', 'tr', 'bl', 'br'] as const).map((pos) => (
           <View key={pos} style={[styles.corner, cornerMap[pos]]} />
@@ -167,46 +170,46 @@ export default function CaptureScreen() {
   );
 }
 
-/* estilos */
+/* estilos ---------------------------------------------------------- */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  camera: { flex: 1 },
-  permissionScreen: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
-  permissionText: { color: '#fff', fontSize: 16 },
-  permissionBtn: { marginTop: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: '#fff', borderRadius: 6 },
+  camera:    { flex: 1 },
 
-  header: { position: 'absolute', top: 50, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  permissionScreen: {
+    flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center',
+  },
+  permissionText: { color: '#fff', fontSize: 16 },
+  permissionBtn:  {
+    marginTop: 12, paddingHorizontal: 20, paddingVertical: 10,
+    borderWidth: 1, borderColor: '#fff', borderRadius: 6,
+  },
+
+  header: {
+    position: 'absolute', top: 50, left: 20, right: 20,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
 
-  frame: { position: 'absolute', top: '25%', left: (width - FRAME_SIZE) / 2, width: FRAME_SIZE, height: FRAME_SIZE },
-  corner: { position: 'absolute', width: 40, height: 40, borderColor: '#fff', borderWidth: 3 },
-  corner_tl: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
-  corner_tr: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
-  corner_bl: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
-  corner_br: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
+  frame: { position: 'absolute', top: '25%', left: (width - FRAME_SIZE) / 2,
+           width: FRAME_SIZE, height: FRAME_SIZE },
+  corner:     { position: 'absolute', width: 40, height: 40, borderColor: '#fff', borderWidth: 3 },
+  corner_tl:  { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
+  corner_tr:  { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
+  corner_bl:  { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
+  corner_br:  { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
 
   bottomBar: {
-    position: 'absolute',
-    bottom: 110,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
+    position: 'absolute', bottom: 110, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'space-evenly',
   },
-  modeBtn: { alignItems: 'center', padding: 8, borderRadius: 12 },
-  modeBtnActive: { backgroundColor: 'rgba(255,255,255,0.15)' },
-  modeTxt: { marginTop: 4, fontSize: 12, color: '#9CA3AF' },
-  modeTxtActive: { color: '#fff' },
+  modeBtn:        { alignItems: 'center', padding: 8, borderRadius: 12 },
+  modeBtnActive:  { backgroundColor: 'rgba(255,255,255,0.15)' },
+  modeTxt:        { marginTop: 4, fontSize: 12, color: '#9CA3AF' },
+  modeTxtActive:  { color: '#fff' },
 
   shutter: {
-    position: 'absolute',
-    bottom: 32,
-    alignSelf: 'center',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 6,
-    borderColor: '#fff',
+    position: 'absolute', bottom: 32, alignSelf: 'center',
+    width: 80, height: 80, borderRadius: 40, borderWidth: 6, borderColor: '#fff',
   },
   flashBtn: { position: 'absolute', bottom: 48, left: 32 },
 });

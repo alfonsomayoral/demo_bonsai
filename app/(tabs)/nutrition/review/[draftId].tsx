@@ -93,7 +93,7 @@ export default function MealReviewScreen() {
         <View className="mt-8 flex-row justify-between">
           <TouchableOpacity
             className="flex-row items-center bg-white/10 px-4 py-3 rounded-2xl"
-            onPress={() => router.push('./nutrition/fix-modal')}  
+            onPress={() => router.push('./fix-modal')}  
           >
             <Ionicons name="create-outline" size={18} color="#fff" />
             <Text className="text-white ml-2">Fix ⭐</Text>
