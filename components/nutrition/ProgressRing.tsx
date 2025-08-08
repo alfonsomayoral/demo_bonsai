@@ -8,6 +8,7 @@ interface Props {
   progress: number;       // 0 – 1
   label:    string;
   value:    number | string;
+  color?:   string;       // color personalizado para el anillo
 }
 
 export const ProgressRing: React.FC<Props> = ({
@@ -16,6 +17,7 @@ export const ProgressRing: React.FC<Props> = ({
   progress,
   label,
   value,
+  color = "#10B981", // color por defecto
 }) => {
   const r   = (size - stroke) / 2;
   const cx  = size / 2;
@@ -31,7 +33,7 @@ export const ProgressRing: React.FC<Props> = ({
           cx={cx}
           cy={cy}
           r={r}
-          stroke="#10B981"
+          stroke={color}
           strokeWidth={stroke}
           strokeDasharray={`${circ} ${circ}`}
           strokeDashoffset={dash}
