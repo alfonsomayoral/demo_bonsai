@@ -18,7 +18,12 @@ export const MealCard: React.FC<Props> = ({
 }) => {
   const router = useRouter();
   return (
-    <TouchableOpacity style={styles.card} onPress={() => router.push(`detail/${mealId}`)}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() =>
+        router.push({ pathname: './detail/[mealId]', params: { mealId } })
+      }
+    >
       <Image source={{ uri: image }} style={styles.thumb} />
       <View style={styles.info}>
         <Text numberOfLines={1} style={styles.title}>{title}</Text>
