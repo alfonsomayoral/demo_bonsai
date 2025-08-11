@@ -1,34 +1,37 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { PropsWithChildren } from 'react';
+import { View, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
-interface Props {
+interface Props extends PropsWithChildren {
   size?: number;
   stroke?: number;
   progress: number;       // 0 – 1
-  label:    string;
-  value:    number | string;
-  color?:   string;       // color personalizado para el anillo
+  color?:   string;       // color del anillo
+  trackColor?: string;    // color del track
 }
 
+/**
+ * Anillo de progreso sin contenido textual.
+ * El centro queda libre: lo que pongas como children se renderiza centrado.
+ */
 export const ProgressRing: React.FC<Props> = ({
   size = 120,
   stroke = 10,
   progress,
-  label,
-  value,
-  color = "#10B981", // color por defecto
+  color = '#10B981',
+  trackColor = '#2A2D33',
+  children,
 }) => {
-  const r   = (size - stroke) / 2;
-  const cx  = size / 2;
-  const cy  = size / 2;
+  const r = (size - stroke) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
   const circ = 2 * Math.PI * r;
-  const dash = circ * (1 - progress);
+  const dash = circ * (1 - Math.max(0, Math.min(1, progress)));
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { width: size, height: size }]}>
       <Svg width={size} height={size}>
-        <Circle cx={cx} cy={cy} r={r} stroke="#374151" strokeWidth={stroke} fill="none" />
+        <Circle cx={cx} cy={cy} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
         <Circle
           cx={cx}
           cy={cy}
@@ -41,17 +44,12 @@ export const ProgressRing: React.FC<Props> = ({
           fill="none"
         />
       </Svg>
-      <View style={styles.labelBox}>
-        <Text style={styles.value}>{value}</Text>
-        <Text style={styles.label}>{label}</Text>
-      </View>
+      <View style={styles.center}>{children}</View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { alignItems: 'center', justifyContent: 'center' },
-  labelBox:  { position: 'absolute', alignItems: 'center' },
-  value:     { fontSize: 28, fontFamily: 'Inter-Bold', color: '#FFFFFF' },
-  label:     { fontSize: 14, fontFamily: 'Inter-Regular', color: '#9CA3AF' },
+  center: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,12 +1,16 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
+// app/(tabs)/nutrition/index.tsx
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNutritionStore } from '@/store/nutritionStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+
 import { ProgressRing } from '@/components/nutrition/ProgressRing';
 import { MealCard } from '@/components/nutrition/MealCard';
 import { FloatingCameraButton } from '@/components/nutrition/FloatingCameraButton';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { WaterCard } from '@/components/nutrition/WaterCard';
+import { useNutritionStore } from '@/store/nutritionStore';
 
 /* --------------------- objetivos por defecto ---------------------- */
 const TARGETS = {
@@ -19,21 +23,20 @@ const TARGETS = {
 /* ------------------------- helpers varios ------------------------- */
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
-const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const formatTime = (iso?: string) => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+};
 
 const todayYmd = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
 };
-
-const ymdOf = (date: Date) => {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
-};
-
 const yesterdayYmd = () => {
   const d = new Date();
   d.setDate(d.getDate() - 1);
@@ -44,25 +47,25 @@ const yesterdayYmd = () => {
 /* ------------------------- componente macro ------------------------ */
 function MacroRing({
   label,
-  icon,
+  iconName,
   value,
   target,
   color,
 }: {
   label: 'Protein' | 'Carbs' | 'Fats';
-  icon: React.ReactNode;
+  iconName: keyof typeof MaterialCommunityIcons.glyphMap;
   value: number;
   target: number;
   color: string;
 }) {
-  const left = Math.max(0, target - value);
   const progress = clamp01(value / target);
-
   return (
     <View style={styles.macroCard}>
+      <Text style={[styles.macroTitle, { color }]}>{label}</Text>
       <View style={styles.macroRingWrapper}>
-        <ProgressRing progress={progress} value={left} label={`${label} left`} size={84} color={color} />
-        <View style={styles.macroIcon}>{icon}</View>
+        <ProgressRing size={84} stroke={8} progress={progress} color={color} trackColor="#1F2937">
+          <MaterialCommunityIcons name={iconName} size={24} color={color} />
+        </ProgressRing>
       </View>
       <Text style={styles.macroBottom}>
         {Math.round(value)}g / {target}g
@@ -73,83 +76,85 @@ function MacroRing({
 
 /* --------------------------- pantalla home -------------------------- */
 export default function NutritionHome() {
-  const loadTodayData = useNutritionStore((s) => s.loadTodayData);
-  const meals = useNutritionStore((s) => s.todayMeals);
-  const totals = useNutritionStore((s) => s.todayTotals);
+  const router = useRouter();
+
+  // Slices por separado
+  const meals  = useNutritionStore((s: any) => s.todayMeals || []);
+  const totals = useNutritionStore((s: any) => s.todayTotals || { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const loadTodayData = useNutritionStore((s: any) => s.loadTodayData);
+
   const [streak, setStreak] = useState<number>(0);
 
-  /* cargar comidas del día */
+  // Carga datos del día solo una vez al montar
   useEffect(() => {
-    loadTodayData?.();
-  }, [loadTodayData]);
+    if (typeof loadTodayData === 'function') loadTodayData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  /* actualizar racha cuando cambien las comidas del día */
-  const updateStreak = useCallback(async () => {
-    try {
-      const key = 'nutrition_streak';
-      const raw = await AsyncStorage.getItem(key);
-      const parsed: { count: number; lastDate: string } | null = raw ? JSON.parse(raw) : null;
+  // Racha basada en si hay comidas hoy
+  useEffect(() => {
+    (async () => {
+      try {
+        const key = 'nutrition_streak';
+        const raw = await AsyncStorage.getItem(key);
+        const parsed: { count: number; lastDate: string } | null = raw ? JSON.parse(raw) : null;
 
-      const today = todayYmd();
-      const yesterday = yesterdayYmd();
-      const hasMealsToday = (meals?.length ?? 0) > 0;
+        const today = todayYmd();
+        const yest  = yesterdayYmd();
+        const hasMealsToday = (meals?.length ?? 0) > 0;
 
-      if (hasMealsToday) {
-        if (!parsed) {
-          const data = { count: 1, lastDate: today };
-          await AsyncStorage.setItem(key, JSON.stringify(data));
-          setStreak(1);
-        } else if (parsed.lastDate === today) {
-          setStreak(parsed.count); // ya contamos hoy
-        } else if (parsed.lastDate === yesterday) {
-          const data = { count: parsed.count + 1, lastDate: today };
-          await AsyncStorage.setItem(key, JSON.stringify(data));
-          setStreak(data.count);
+        if (hasMealsToday) {
+          if (!parsed) {
+            const data = { count: 1, lastDate: today };
+            await AsyncStorage.setItem(key, JSON.stringify(data));
+            setStreak(1);
+          } else if (parsed.lastDate === today) {
+            setStreak(parsed.count);
+          } else if (parsed.lastDate === yest) {
+            const data = { count: parsed.count + 1, lastDate: today };
+            await AsyncStorage.setItem(key, JSON.stringify(data));
+            setStreak(data.count);
+          } else {
+            const data = { count: 1, lastDate: today };
+            await AsyncStorage.setItem(key, JSON.stringify(data));
+            setStreak(1);
+          }
         } else {
-          const data = { count: 1, lastDate: today };
-          await AsyncStorage.setItem(key, JSON.stringify(data));
-          setStreak(1);
+          if (parsed && parsed.lastDate !== today && parsed.lastDate !== yest) {
+            const data = { count: 0, lastDate: parsed.lastDate };
+            await AsyncStorage.setItem(key, JSON.stringify(data));
+            setStreak(0);
+          } else {
+            setStreak(parsed?.count ?? 0);
+          }
         }
-      } else {
-        // si no hay comidas hoy y la última vez no fue ayer ni hoy, reseteamos
-        if (parsed && parsed.lastDate !== today && parsed.lastDate !== yesterday) {
-          const data = { count: 0, lastDate: parsed.lastDate };
-          await AsyncStorage.setItem(key, JSON.stringify(data));
-          setStreak(0);
-        } else {
-          setStreak(parsed?.count ?? 0);
-        }
+      } catch {
+        // si falla storage, no rompemos la UI
       }
-    } catch {
-      // si falla storage, no rompemos la UI
-    }
+    })();
   }, [meals]);
-
-  useEffect(() => {
-    updateStreak();
-  }, [updateStreak]);
 
   /* consumido y progreso */
   const consumed = useMemo(
     () => ({
-      calories: totals.calories ?? 0,
-      protein: totals.protein ?? 0,
-      carbs: totals.carbs ?? 0,
-      fat: totals.fat ?? 0,
+      calories: totals?.calories ?? 0,
+      protein : totals?.protein  ?? 0,
+      carbs   : totals?.carbs    ?? 0,
+      fat     : totals?.fat      ?? 0,
     }),
     [totals]
   );
 
-  const kcalLeft = Math.max(0, TARGETS.calories - consumed.calories);
+  const kcalLeft     = Math.max(0, TARGETS.calories - consumed.calories);
   const kcalProgress = clamp01(consumed.calories / TARGETS.calories);
 
-  /* lista mostrable */
+  /* lista mostrable (BD o demo) */
   const listMeals =
     meals && meals.length
-      ? meals.map((m) => ({
+      ? meals.map((m: any) => ({
           id: m.id,
           image:
-            m.meal_items?.find((it) => !!it.image_path)?.image_path ??
+            m.meal_items?.find((it: any) => !!it.image_path)?.image_path ??
             'https://images.unsplash.com/photo-1546069901-eacef0df6022?auto=format&fit=crop&w=1200&q=60',
           title: m.meal_items?.[0]?.name ?? 'Logged meal',
           kcal: m.total_kcal ?? 0,
@@ -186,27 +191,25 @@ export default function NutritionHome() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
+        {/* Streak pill (dentro del área segura) */}
+        <View style={styles.streakPill}>
+          <Text style={styles.streakEmoji}>🔥</Text>
+          <Text style={styles.streakText}>{streak}</Text>
+        </View>
         {/* --------- Card principal con anillo de calorías --------- */}
         <View style={styles.kcalCard}>
-          {/* racha (esquina sup-izq) */}
-          <View style={styles.streakPill}>
-            <Text style={styles.streakEmoji}>🔥</Text>
-            <Text style={styles.streakText}>{streak}</Text>
-          </View>
-
+          {/* Título "Calories" en la parte superior derecha */}
+          <Text style={styles.kcalTitle}>Calories Target</Text>
+          
           <View style={{ flex: 1 }}>
-            <Text style={styles.kcalBig}>{kcalLeft}</Text>
-            <Text style={styles.kcalSub}>Calories left</Text>
+            <Text style={styles.kcalBig}>{Math.round(consumed.calories)}/{TARGETS.calories} kcal</Text>
           </View>
 
           <View style={styles.kcalRing}>
-            <ProgressRing progress={kcalProgress} value={kcalLeft} label="" size={110} />
-            <MaterialCommunityIcons
-              name="fire"
-              size={24}
-              color="#FFFFFF"
-              style={styles.kcalIcon}
-            />
+            <ProgressRing size={110} stroke={12} progress={kcalProgress} color="#10B981" trackColor="#1F2937">
+              {/* dentro del ring solo icono */}
+              <MaterialCommunityIcons name="fire-circle" size={30} color="#10B981" />
+            </ProgressRing>
           </View>
         </View>
 
@@ -214,30 +217,33 @@ export default function NutritionHome() {
         <View style={styles.macroRow}>
           <MacroRing
             label="Protein"
-            icon={<MaterialCommunityIcons name="food-drumstick" size={20} color="#fff" />}
+            iconName="food-drumstick-outline"
             value={consumed.protein}
             target={TARGETS.protein}
-            color="#EF4444"
+            color="#FF6B6B"
           />
           <MacroRing
             label="Carbs"
-            icon={<MaterialCommunityIcons name="bread-slice" size={20} color="#fff" />}
+            iconName="rice"
             value={consumed.carbs}
             target={TARGETS.carbs}
-            color="#F59E0B"
+            color="#FFD93D"
           />
           <MacroRing
             label="Fats"
-            icon={<Text style={{ fontSize: 18 }}>🥑</Text>}
+            iconName="cheese"
             value={consumed.fat}
             target={TARGETS.fat}
-            color="#8B5CF6"
+            color="#FF8E53"
           />
         </View>
 
+        {/* --------------------- Agua (3L máx.) --------------------- */}
+        <WaterCard />
+
         {/* ---------------------- Recientes ---------------------- */}
         <Text style={styles.sectionTitle}>Recently uploaded</Text>
-        {listMeals.map((m) => (
+        {listMeals.map((m: any) => (
           <MealCard
             key={m.id}
             mealId={m.id}
@@ -265,6 +271,20 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0B0B0D' },
   scroll: { padding: 20, paddingBottom: 60 },
 
+  /* streak pill dentro del área segura */
+  streakPill: {
+    backgroundColor: '#191B1F',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
+  streakEmoji: { fontSize: 18, marginRight: 4 },
+  streakText: { color: '#fff', fontFamily: 'Inter-SemiBold', fontSize: 13 },
+
   /* card principal kcal */
   kcalCard: {
     backgroundColor: '#191B1F',
@@ -273,49 +293,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+    position: 'relative',
   },
-  streakPill: {
+  kcalTitle: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: '#111317',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
+    top: 16,
+    left: 16,
+    color: '#10B981',
+    fontSize: 26,
+    fontFamily: 'Inter-SemiBold',
   },
-  streakEmoji: { fontSize: 14, marginRight: 4 },
-  streakText: { color: '#fff', fontFamily: 'Inter-SemiBold', fontSize: 13 },
+  kcalBig: { color: '#FFFFFF', fontSize: 20, fontFamily: 'Inter-Bold' },
 
-  kcalBig: { color: '#FFFFFF', fontSize: 36, fontFamily: 'Inter-Bold' },
-  kcalSub: { color: '#9CA3AF', marginTop: 2 },
-
-  kcalRing: { width: 120, height: 120, alignItems: 'center', justifyContent: 'center' },
-  kcalIcon: { position: 'absolute' },
+  kcalRing: { width: 110, height: 110, alignItems: 'center', justifyContent: 'center' },
 
   /* macro grid */
   macroRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   macroCard: {
     flex: 1,
     backgroundColor: '#191B1F',
     borderRadius: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
     marginHorizontal: 4,
   },
+  macroTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
   macroRingWrapper: { width: 90, height: 90, alignItems: 'center', justifyContent: 'center' },
-  macroIcon: { position: 'absolute' },
   macroBottom: { color: '#9CA3AF', fontSize: 12, marginTop: 8 },
 
   sectionTitle: {
     color: '#FFFFFF',
     fontSize: 18,
     fontFamily: 'Inter-SemiBold',
+    marginTop: 8,
     marginBottom: 12,
   },
 });
