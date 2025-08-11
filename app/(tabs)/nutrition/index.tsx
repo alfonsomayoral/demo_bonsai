@@ -64,7 +64,7 @@ function MacroRing({
       <Text style={[styles.macroTitle, { color }]}>{label}</Text>
       <View style={styles.macroRingWrapper}>
         <ProgressRing size={84} stroke={8} progress={progress} color={color} trackColor="#1F2937">
-          <MaterialCommunityIcons name={iconName} size={24} color={color} />
+          <MaterialCommunityIcons name={iconName} size={28} color={color} />
         </ProgressRing>
       </View>
       <Text style={styles.macroBottom}>
@@ -323,8 +323,8 @@ const styles = StyleSheet.create({
   },
   macroTitle: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 13,
-    marginBottom: 8,
+    fontSize: 15,
+    marginBottom: 4,
     textAlign: 'center',
   },
   macroRingWrapper: { width: 90, height: 90, alignItems: 'center', justifyContent: 'center' },

@@ -54,7 +54,7 @@ export const WaterCard: React.FC = () => {
       <View style={styles.card}>
         <View style={styles.left}>
           <View style={styles.iconBox}>
-            <MaterialCommunityIcons name="cup-water" size={22} color="#6CA8FF" />
+            <MaterialCommunityIcons name="cup-water" size={28} color="#6CA8FF" />
           </View>
           <View>
             <Text style={styles.title}>Water</Text>
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginRight: 10,
   },
-  title: { color: '#FFFFFF', fontFamily: 'Inter-SemiBold', fontSize: 14 },
+  title: { color: '#6CA8FF', fontFamily: 'Inter-SemiBold', fontSize: 15 },
   subtitle: { color: '#9CA3AF', fontFamily: 'Inter-Regular', fontSize: 12, marginTop: 2 },
 
   actions: { flexDirection: 'row', alignItems: 'center' },

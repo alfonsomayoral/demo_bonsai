@@ -56,11 +56,6 @@ export default function WorkoutTab() {
       </Modal>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Workout</Text>
-        </View>
-
         {/* search + filter */}
         <View style={styles.searchContainer}>
           <TouchableOpacity
@@ -171,7 +166,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 16,
   },
-  carousel: { paddingRight: 20, gap: 16 },
+  carousel: { paddingRight: 16, gap: 14 },
 
   addRoutineCard: {
     backgroundColor: colors.card,
