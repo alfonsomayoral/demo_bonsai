@@ -37,7 +37,6 @@ export default function WorkoutTab() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* filter modal */}
       <Modal
         visible={filterOpen}
         animationType="slide"
@@ -184,7 +183,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  progressCard: { height: 120, justifyContent: 'center' },
+  progressCard: { height: 120, justifyContent: 'center', backgroundColor: '#191B1F' },
   cardTitle: {
     fontSize: 18,
     fontWeight: '600',

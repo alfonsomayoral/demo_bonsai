@@ -22,11 +22,12 @@ const styles = StyleSheet.create({
     height: 200,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#191B1F',
   },
   placeholder: {
     width: 120,
     height: 160,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#391B1F',
     borderRadius: 8,
   },
 });

@@ -40,7 +40,7 @@ export const MealCard: React.FC<Props> = ({
 };
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', padding: 12, borderRadius: 16, backgroundColor: '#1F2937', marginBottom: 12 },
+  card: { flexDirection: 'row', padding: 12, borderRadius: 16, backgroundColor: '#191B1F', marginBottom: 12 },
   thumb: { width: 56, height: 56, borderRadius: 12, marginRight: 12 },
   info:  { flex: 1 },
   title: { color: '#FFFFFF', fontFamily: 'Inter-SemiBold' },

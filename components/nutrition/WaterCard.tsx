@@ -1,5 +1,15 @@
+// components/nutrition/WaterCard.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -48,20 +58,36 @@ export const WaterCard: React.FC = () => {
   };
 
   const liters = (ml / 1000).toFixed(1);
+  const progress = Math.max(0, Math.min(1, ml / WATER_GOAL_ML)); // 0..1
 
   return (
     <>
       <View style={styles.card}>
+        {/* Izquierda: icono + textos */}
         <View style={styles.left}>
           <View style={styles.iconBox}>
             <MaterialCommunityIcons name="cup-water" size={28} color="#6CA8FF" />
           </View>
           <View>
             <Text style={styles.title}>Water</Text>
-            <Text style={styles.subtitle}>{ml} ml ({liters} L)</Text>
+            <Text style={styles.subtitle}>
+              {ml} ml ({liters} L)
+            </Text>
           </View>
         </View>
 
+        {/* Centro: barra de progreso + etiquetas 0% / 100% */}
+        <View style={styles.middle}>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+          </View>
+          <View style={styles.progressScale}>
+            <Text style={styles.scaleText}>0L</Text>
+            <Text style={styles.scaleText}>3L</Text>
+          </View>
+        </View>
+
+        {/* Derecha: acciones */}
         <View style={styles.actions}>
           <TouchableOpacity style={styles.circleBtn} onPress={sub}>
             <MaterialCommunityIcons name="minus" size={18} color="#fff" />
@@ -92,10 +118,16 @@ export const WaterCard: React.FC = () => {
               style={styles.input}
             />
             <View style={styles.modalRow}>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#2A2D33' }]} onPress={() => setModal(false)}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: '#2A2D33' }]}
+                onPress={() => setModal(false)}
+              >
                 <Text style={styles.modalBtnTxt}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#10B981' }]} onPress={onSaveInput}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: '#10B981' }]}
+                onPress={onSaveInput}
+              >
                 <Text style={[styles.modalBtnTxt, { color: '#0B0B0D' }]}>Save</Text>
               </TouchableOpacity>
             </View>
@@ -113,29 +145,65 @@ const styles = StyleSheet.create({
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 18,
   },
+
+  /* Izquierda */
   left: { flexDirection: 'row', alignItems: 'center' },
   iconBox: {
-    width: 38, height: 38, borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     backgroundColor: '#1E2430',
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 10,
   },
   title: { color: '#6CA8FF', fontFamily: 'Inter-SemiBold', fontSize: 15 },
   subtitle: { color: '#9CA3AF', fontFamily: 'Inter-Regular', fontSize: 12, marginTop: 2 },
 
-  actions: { flexDirection: 'row', alignItems: 'center' },
+  /* Centro: barra */
+  middle: {
+    flex: 1,
+    paddingHorizontal: 22,
+  },
+  progressTrack: {
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: '#0F1115',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#6CA8FF',
+    borderRadius: 6,
+  },
+  progressScale: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  scaleText: { color: '#7B7F86', fontSize: 10, fontFamily: 'Inter-Medium' },
+
+  /* Derecha: acciones */
+  actions: { flexDirection: 'row', alignItems: 'center', marginLeft: 8 },
   circleBtn: {
-    width: 34, height: 34, borderRadius: 17,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#2A2D33',
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: 8,
   },
 
-  /* modal */
-  modalWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  /* Modal */
+  modalWrap: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalCard: { width: '80%', backgroundColor: '#191B1F', borderRadius: 14, padding: 16 },
   modalTitle: { color: '#FFFFFF', fontFamily: 'Inter-SemiBold', fontSize: 16, marginBottom: 10 },
   input: {
@@ -147,8 +215,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   modalRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14 },
-  modalBtn: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginLeft: 10,
-  },
+  modalBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginLeft: 10 },
   modalBtnTxt: { color: '#FFFFFF', fontFamily: 'Inter-SemiBold' },
 });
