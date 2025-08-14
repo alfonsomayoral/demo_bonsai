@@ -5,12 +5,13 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import 'react-native-get-random-values';
+import 'react-native-url-polyfill/auto';
 
 
-SplashScreen.preventAutoHideAsync();
+try{SplashScreen.preventAutoHideAsync();} catch{}
 
 export default function RootLayout() {
-  useFrameworkReady();
+  useFrameworkReady();    
 
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Regular': Inter_400Regular,

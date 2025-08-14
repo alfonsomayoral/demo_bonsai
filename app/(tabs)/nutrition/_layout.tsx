@@ -9,6 +9,7 @@ export default function NutritionStack() {
       <Stack.Screen name="analyzing"   options={{ presentation: 'transparentModal' }} />
       <Stack.Screen name="review/[draftId]" />
       <Stack.Screen name="fix-modal"   options={{ presentation: 'modal' }} />
+      <Stack.Screen name="detail/[mealId]" />
     </Stack>
   );
 }

@@ -1,29 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, Target, Download, Settings, Bell, Shield, CircleHelp as HelpCircle, LogOut, ChevronRight } from 'lucide-react-native';
+import { User, Target, Download, Settings, Shield, CircleHelp as HelpCircle, ChevronRight } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
+import { Database } from '@/lib/supabase';
 
-const settingsItems = [
-  { id: 'notifications', title: 'Push Notifications', subtitle: 'Meal and workout reminders', type: 'toggle', value: true },
-  { id: 'units', title: 'Units', subtitle: 'Metric (kg, cm)', type: 'option' },
-  { id: 'privacy', title: 'Privacy', subtitle: 'Data sharing preferences', type: 'option' },
-  { id: 'export', title: 'Export Data', subtitle: 'Download your data as CSV', type: 'action', icon: Download },
-];
-
-const supportItems = [
-  { id: 'help', title: 'Help Center', icon: HelpCircle },
-  { id: 'feedback', title: 'Send Feedback', icon: Settings },
-  { id: 'privacy-policy', title: 'Privacy Policy', icon: Shield },
-];
+type UserRow = Database['public']['Tables']['users']['Row'];
 
 export default function Profile() {
   const router = useRouter();
   const [notifications, setNotifications] = useState(true);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({
@@ -32,6 +22,23 @@ export default function Profile() {
     weight: '',
     height: '',
   });
+
+  const unitLabelWeight = useMemo(
+    () => (userProfile?.unit_system === 'imperial' ? 'lb' : 'kg'),
+    [userProfile?.unit_system]
+  );
+  const unitLabelHeight = useMemo(
+    () => (userProfile?.unit_system === 'imperial' ? 'in' : 'cm'),
+    [userProfile?.unit_system]
+  );
+  const unitsSubtitle = useMemo(
+    () => (userProfile?.unit_system === 'imperial' ? 'Imperial (lb, in)' : 'Metric (kg, cm)'),
+    [userProfile?.unit_system]
+  );
+  const goalText = useMemo(() => {
+    const g = userProfile?.goal_type ?? 'maintain';
+    return g.charAt(0).toUpperCase() + g.slice(1);
+  }, [userProfile?.goal_type]);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -47,9 +54,9 @@ export default function Profile() {
           setUserProfile(data);
           setEditData({
             full_name: data.full_name || '',
-            age: data.age ? String(data.age) : '',
-            weight: data.weight ? String(data.weight) : '',
-            height: data.height ? String(data.height) : '',
+            age: data.age != null ? String(data.age) : '',
+            weight: data.weight != null ? String(data.weight) : '',
+            height: data.height != null ? String(data.height) : '',
           });
         }
       }
@@ -61,14 +68,26 @@ export default function Profile() {
   const handleSaveEdit = async () => {
     if (!userProfile) return;
     setLoading(true);
-    const { error } = await supabase.from('users').update({
-      full_name: editData.full_name,
+    const toNumber = (s: string) => (s ? Number(s.replace(',', '.')) : null);
+    const payload = {
+      full_name: editData.full_name || null,
       age: editData.age ? parseInt(editData.age, 10) : null,
-      weight: editData.weight ? parseFloat(editData.weight) : null,
-      height: editData.height ? parseFloat(editData.height) : null,
-    }).eq('id', userProfile.id);
+      weight: toNumber(editData.weight),
+      height: toNumber(editData.height),
+    };
+    const { error } = await supabase
+      .from('users')
+      .update(payload)
+      .eq('id', userProfile.id);
+
     if (!error) {
-      setUserProfile({ ...userProfile, ...editData, age: editData.age ? parseInt(editData.age, 10) : null, weight: editData.weight ? parseFloat(editData.weight) : null, height: editData.height ? parseFloat(editData.height) : null });
+      setUserProfile({
+        ...userProfile,
+        full_name: payload.full_name ?? undefined,
+        age: payload.age ?? undefined,
+        weight: payload.weight ?? undefined,
+        height: payload.height ?? undefined,
+      } as UserRow);
       setEditMode(false);
     }
     setLoading(false);
@@ -103,15 +122,8 @@ export default function Profile() {
     );
   };
 
-  const calculateProgress = () => {
-    if (!userProfile) return 0;
-    const startWeight = userProfile.weight || 0;
-    const targetWeight = userProfile.target_weight || 0;
-    const currentWeight = userProfile.weight || 0;
-    const totalLoss = startWeight - targetWeight;
-    const currentLoss = startWeight - currentWeight;
-    return totalLoss ? (currentLoss / totalLoss) * 100 : 0;
-  };
+  // Ahora no tenemos start/target weight en DB; mostramos “—” y barra a 0%.
+  const calculateProgress = () => 0;
 
   if (loading) {
     return (
@@ -122,6 +134,23 @@ export default function Profile() {
       </SafeAreaView>
     );
   }
+
+  // Items de ajustes con subtítulo dinámico de unidades
+  const settingsItems = [
+    { id: 'notifications', title: 'Push Notifications', subtitle: 'Meal and workout reminders', type: 'toggle' as const, value: true },
+    { id: 'units', title: 'Units', subtitle: unitsSubtitle, type: 'option' as const },
+    { id: 'privacy', title: 'Privacy', subtitle: 'Data sharing preferences', type: 'option' as const },
+    { id: 'export', title: 'Export Data', subtitle: 'Download your data as CSV', type: 'action' as const, icon: Download },
+  ];
+
+  const supportItems = [
+    { id: 'help', title: 'Help Center', icon: HelpCircle },
+    { id: 'feedback', title: 'Send Feedback', icon: Settings },
+    { id: 'privacy-policy', title: 'Privacy Policy', icon: Shield },
+  ];
+
+  const memberSince =
+    userProfile?.created_at ? new Date(userProfile.created_at).toLocaleDateString() : '—';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -140,12 +169,12 @@ export default function Profile() {
                 placeholder="Full Name"
                 placeholderTextColor="#9CA3AF"
               />
-              <Text style={styles.userEmail}>{userProfile.email}</Text>
+              <Text style={styles.userEmail}>{userProfile?.email}</Text>
             </>
           ) : (
             <>
-              <Text style={styles.userName}>{userProfile.full_name}</Text>
-              <Text style={styles.userEmail}>{userProfile.email}</Text>
+              <Text style={styles.userName}>{userProfile?.full_name || '—'}</Text>
+              <Text style={styles.userEmail}>{userProfile?.email}</Text>
             </>
           )}
         </View>
@@ -160,6 +189,7 @@ export default function Profile() {
               <Button title="Edit" onPress={() => setEditMode(true)} style={{ marginLeft: 8 }} />
             )}
           </View>
+
           <View style={{ marginBottom: 12 }}>
             <Text style={styles.label}>Age</Text>
             {editMode ? (
@@ -172,11 +202,12 @@ export default function Profile() {
                 placeholderTextColor="#9CA3AF"
               />
             ) : (
-              <Text style={styles.weightValue}>{userProfile.age ?? '-'}</Text>
+              <Text style={styles.weightValue}>{userProfile?.age ?? '—'}</Text>
             )}
           </View>
+
           <View style={{ marginBottom: 12 }}>
-            <Text style={styles.label}>Weight (kg)</Text>
+            <Text style={styles.label}>Weight ({unitLabelWeight})</Text>
             {editMode ? (
               <TextInput
                 style={[styles.input, { backgroundColor: '#222', borderRadius: 8, color: '#fff' }]}
@@ -187,11 +218,14 @@ export default function Profile() {
                 placeholderTextColor="#9CA3AF"
               />
             ) : (
-              <Text style={styles.weightValue}>{userProfile.weight ?? '-'}</Text>
+              <Text style={styles.weightValue}>
+                {userProfile?.weight != null ? String(userProfile?.weight) : '—'}
+              </Text>
             )}
           </View>
+
           <View style={{ marginBottom: 12 }}>
-            <Text style={styles.label}>Height (cm)</Text>
+            <Text style={styles.label}>Height ({unitLabelHeight})</Text>
             {editMode ? (
               <TextInput
                 style={[styles.input, { backgroundColor: '#222', borderRadius: 8, color: '#fff' }]}
@@ -202,7 +236,9 @@ export default function Profile() {
                 placeholderTextColor="#9CA3AF"
               />
             ) : (
-              <Text style={styles.weightValue}>{userProfile.height ?? '-'}</Text>
+              <Text style={styles.weightValue}>
+                {userProfile?.height != null ? String(userProfile?.height) : '—'}
+              </Text>
             )}
           </View>
         </Card>
@@ -213,32 +249,29 @@ export default function Profile() {
             <Text style={styles.progressTitle}>Goal Progress</Text>
             <View style={styles.goalBadge}>
               <Target size={16} color="#10B981" />
-              <Text style={styles.goalText}>{userProfile.goal}</Text>
+              <Text style={styles.goalText}>{goalText}</Text>
             </View>
           </View>
-          
+
           <View style={styles.weightProgress}>
             <View style={styles.weightItem}>
-              <Text style={styles.weightValue}>{userProfile.startWeight}</Text>
+              <Text style={styles.weightValue}>—</Text>
               <Text style={styles.weightLabel}>Start</Text>
             </View>
             <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressBarFill, 
-                  { width: `${calculateProgress()}%` }
-                ]} 
-              />
+              <View style={[styles.progressBarFill, { width: `${calculateProgress()}%` }]} />
             </View>
             <View style={styles.weightItem}>
-              <Text style={styles.weightValue}>{userProfile.targetWeight}</Text>
+              <Text style={styles.weightValue}>—</Text>
               <Text style={styles.weightLabel}>Target</Text>
             </View>
           </View>
-          
+
           <View style={styles.currentWeight}>
             <Text style={styles.currentWeightLabel}>Current Weight</Text>
-            <Text style={styles.currentWeightValue}>{userProfile.currentWeight} kg</Text>
+            <Text style={styles.currentWeightValue}>
+              {userProfile?.weight != null ? `${userProfile.weight} ${unitLabelWeight}` : '—'}
+            </Text>
           </View>
         </Card>
 
@@ -247,20 +280,31 @@ export default function Profile() {
           <Text style={styles.statsTitle}>Your Stats</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{userProfile.dailyCalories}</Text>
+              <Text style={styles.statValue}>
+                {userProfile?.kcal_target != null ? String(userProfile.kcal_target) : '—'}
+              </Text>
               <Text style={styles.statLabel}>Daily Calories</Text>
             </View>
+
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{(userProfile.startWeight - userProfile.currentWeight).toFixed(1)}</Text>
-              <Text style={styles.statLabel}>Weight Lost (kg)</Text>
+              <Text style={styles.statValue}>
+                {userProfile?.meals_per_day != null ? String(userProfile.meals_per_day) : '—'}
+              </Text>
+              <Text style={styles.statLabel}>Meals / day</Text>
             </View>
+
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>14</Text>
-              <Text style={styles.statLabel}>Days Active</Text>
+              <Text style={styles.statValue}>
+                {userProfile?.gym_sessions_per_week != null ? String(userProfile.gym_sessions_per_week) : '—'}
+              </Text>
+              <Text style={styles.statLabel}>Gym sessions / week</Text>
             </View>
+
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>28</Text>
-              <Text style={styles.statLabel}>Workouts</Text>
+              <Text style={styles.statValue}>
+                {userProfile?.unit_system === 'imperial' ? 'Imperial' : 'Metric'}
+              </Text>
+              <Text style={styles.statLabel}>Units</Text>
             </View>
           </View>
         </Card>
@@ -329,7 +373,7 @@ export default function Profile() {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Member since {userProfile.joinDate}
+            Member since {memberSince}
           </Text>
           <Text style={styles.versionText}>
             Bonsai v1.0.0

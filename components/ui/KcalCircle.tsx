@@ -12,7 +12,8 @@ export const KcalCircle: React.FC<KcalCircleProps> = ({ value, target }) => {
   const strokeWidth = 12;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const progress = Math.min(value / target, 1);
+  const safeTarget = target > 0 ? target : 1;
+  const progress = Math.min(value / safeTarget, 1);
   const offset = circumference * (1 - progress);
 
   return (

@@ -171,7 +171,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
-          started_at: string;
+          start_time: string;
           finished_at: string | null;
           duration_sec: number | null;
           total_volume: number;
@@ -179,7 +179,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
-          started_at?: string;
+          start_time?: string;
           finished_at?: string | null;
           duration_sec?: number | null;
           total_volume?: number;
@@ -187,7 +187,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
-          started_at?: string;
+          start_time?: string;
           finished_at?: string | null;
           duration_sec?: number | null;
           total_volume?: number;
@@ -420,7 +420,7 @@ export const mockRoutines: Routine[] = [
 export const mockWorkoutSession: WorkoutSession = {
   id: 'ws-1',
   user_id: 'demo',
-  started_at: new Date().toISOString(),
+  start_time: new Date().toISOString(),
   finished_at: null,
   duration_sec: null,
   total_volume: 0,
@@ -451,33 +451,37 @@ export const uploadMealImage = async (
       .upload(fileName, blob, {
         contentType: 'image/jpeg',
         cacheControl: '3600',
-        upsert: true,
+        upsert: false,
       });
     if (error) throw error;
 
     // ④ URL pública
-    const { data: { publicUrl } } = supabase.storage
-      .from('meal-images')
-      .getPublicUrl(fileName);
+    return fileName;
 
-    return publicUrl;
   } catch (err) {
     console.error('uploadMealImage', err);
     return null;
   }
 };
 
+export async function signedImageUrl(path: string, expiresIn = 300) {
+    const { data, error } = await supabase.storage
+      .from('meal-images')
+      .createSignedUrl(path, expiresIn);
+    if (error) return null;
+    return data?.signedUrl ?? null;
+}
+
 /**
  * Invoca la Edge Function `analyze-food`
  */
 export const analyzeFoodImage = async (
-  imageUrl: string,
-  userId: string,
-  fixPrompt?: string
-): Promise<any> => {
-  const { data, error } = await supabase.functions.invoke('analyze-food', {
-    body: { imageUrl, userId, fixPrompt },
-  });
-  if (error) throw error;
-  return data;
-};
+    storagePath: string,
+    fixPrompt?: string
+  ): Promise<any> => {
+    const { data, error } = await supabase.functions.invoke('analyze-food', {
+      body: { storagePath, fixPrompt },
+    });
+     if (error) throw error;
+     return data;
+  };

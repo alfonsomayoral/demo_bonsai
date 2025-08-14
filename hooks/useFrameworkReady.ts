@@ -1,13 +1,11 @@
 import { useEffect } from 'react';
 
-declare global {
-  interface Window {
-    frameworkReady?: () => void;
-  }
-}
-
 export function useFrameworkReady() {
   useEffect(() => {
-    window.frameworkReady?.();
-  });
+    // En web: notifica al contenedor de pruebas si existe.
+    // En nativo: no falla porque chequeamos con globalThis/window opcional.
+    try {
+      (globalThis as any)?.window?.frameworkReady?.();
+    } catch {}
+  }, []); // <- solo una vez
 }

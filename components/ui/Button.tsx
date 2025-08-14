@@ -22,6 +22,8 @@ export function Button({
 }: ButtonProps) {
   return (
     <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       style={[
         styles.base,
         styles[variant],

@@ -20,7 +20,8 @@ export const MacroChart: React.FC<MacroChartProps> = ({ protein, proteinTarget, 
   return (
     <View style={styles.container}>
       {macros.map((macro) => {
-        const percent = Math.min(macro.value / macro.target, 1);
+        const denom = macro.target > 0 ? macro.target : 1;
+        const percent = Math.min(macro.value / denom, 1);
         return (
           <View key={macro.label} style={styles.row}>
             <Text style={styles.label}>{macro.label}</Text>

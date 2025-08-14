@@ -16,11 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 const WATER_GOAL_ML = 3000;
 const STEP = 300;
 
-const ymd = () => {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
-};
+const ymd = () => new Date().toLocaleDateString('sv-SE');
 
 export const WaterCard: React.FC = () => {
   const [ml, setMl] = useState(0);

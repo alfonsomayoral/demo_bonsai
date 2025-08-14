@@ -16,19 +16,17 @@ export default function Index() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      setTimeout(() => {
-        if (session) {
+      if (session) {
           // User is authenticated, check if they've completed onboarding
-          router.replace('/(tabs)/nutrition');
-        } else {
+        router.replace('./(tabs)/nutrition');
+      } else {
           // User is not authenticated
-          router.replace('/auth');
-        }
-        setIsLoading(false);
-      }, 2000);
+        router.replace('./auth');
+      }
+      setIsLoading(false);
     } catch (error) {
       console.error('Error checking auth status:', error);
-      router.replace('/auth');
+      router.replace('./auth');
       setIsLoading(false);
     }
   };
