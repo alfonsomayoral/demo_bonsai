@@ -59,21 +59,16 @@ export const WaterCard: React.FC = () => {
   return (
     <>
       <View style={styles.card}>
-        {/* Izquierda: icono + textos */}
+        {/* Izquierda: solo icono */}
         <View style={styles.left}>
           <View style={styles.iconBox}>
-            <MaterialCommunityIcons name="cup-water" size={28} color="#6CA8FF" />
-          </View>
-          <View>
-            <Text style={styles.title}>Water</Text>
-            <Text style={styles.subtitle}>
-              {ml} ml ({liters} L)
-            </Text>
+            <MaterialCommunityIcons name="cup-water" size={32} color="#6CA8FF" />
           </View>
         </View>
 
-        {/* Centro: barra de progreso + etiquetas 0% / 100% */}
+        {/* Centro: barra de progreso + etiquetas 0% / 100% + título y cantidad */}
         <View style={styles.middle}>
+          <Text style={styles.title}>Water</Text>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
           </View>
@@ -81,6 +76,9 @@ export const WaterCard: React.FC = () => {
             <Text style={styles.scaleText}>0L</Text>
             <Text style={styles.scaleText}>3L</Text>
           </View>
+          <Text style={styles.subtitle}>
+            {ml} ml ({liters} L)
+          </Text>
         </View>
 
         {/* Derecha: acciones */}
@@ -145,7 +143,7 @@ const styles = StyleSheet.create({
   },
 
   /* Izquierda */
-  left: { flexDirection: 'row', alignItems: 'center' },
+  left: { alignItems: 'center', marginRight: 15 },
   iconBox: {
     width: 38,
     height: 38,
@@ -153,18 +151,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E2430',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
   },
-  title: { color: '#6CA8FF', fontFamily: 'Inter-SemiBold', fontSize: 15 },
-  subtitle: { color: '#9CA3AF', fontFamily: 'Inter-Regular', fontSize: 12, marginTop: 2 },
+  title: { color: '#6CA8FF', fontFamily: 'Inter-SemiBold', fontSize: 15, marginBottom: 8, textAlign: 'center' },
+  subtitle: { color: '#9CA3AF', fontFamily: 'Inter-Regular', fontSize: 12, marginTop: 8, textAlign: 'center' },
 
   /* Centro: barra */
   middle: {
     flex: 1,
-    paddingHorizontal: 22,
+    paddingHorizontal: 10,
+    minWidth: 110, // Añade un ancho mínimo para hacer la barra más larga
   },
   progressTrack: {
-    height: 10,
+    height: 12,
     borderRadius: 6,
     backgroundColor: '#0F1115',
     overflow: 'hidden',
@@ -184,8 +182,8 @@ const styles = StyleSheet.create({
   /* Derecha: acciones */
   actions: { flexDirection: 'row', alignItems: 'center', marginLeft: 8 },
   circleBtn: {
-    width: 34,
-    height: 34,
+    width: 30,
+    height: 30,
     borderRadius: 17,
     backgroundColor: '#2A2D33',
     alignItems: 'center',

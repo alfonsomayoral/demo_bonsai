@@ -21,8 +21,7 @@
       "expo-font",
       "expo-web-browser",
       "expo-camera",
-      "expo-image-picker",
-      "expo-blur"
+      "expo-image-picker"
     ],
     "experiments": {
       "typedRoutes": true
