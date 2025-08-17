@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/Card';
+import { signedImageUrl } from '@/lib/supabase';
 
 type MealItem = {
   id: string;
@@ -32,6 +33,7 @@ export default function MealDetailScreen() {
   const { mealId } = useLocalSearchParams<{ mealId: string }>();
   const [meal, setMeal] = useState<Meal | null>(null);
   const [loading, setLoading] = useState(true);
+  const [banner, setBanner] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -53,6 +55,21 @@ export default function MealDetailScreen() {
     if (mealId) load();
   }, [mealId]);
 
+  // Resolver banner firmado si el bucket es privado
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const path = meal?.meal_items?.find((i) => !!i.image_path)?.image_path ?? null;
+      if (!path) {
+        setBanner('https://images.unsplash.com/photo-1546069901-eacef0df6022?auto=format&fit=crop&w=1200&q=60');
+        return;
+      }
+      const url = await signedImageUrl(path, 300);
+      if (live) setBanner(url ?? null);
+    })();
+    return () => { live = false; };
+  }, [meal?.meal_items]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -72,20 +89,15 @@ export default function MealDetailScreen() {
     );
   }
 
-  const banner =
-    meal.meal_items?.find((i) => !!i.image_path)?.image_path ??
-    'https://images.unsplash.com/photo-1546069901-eacef0df6022?auto=format&fit=crop&w=1200&q=60';
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Banner */}
-        <Image source={{ uri: banner }} style={styles.banner} />
+        {banner ? <Image source={{ uri: banner }} style={styles.banner} /> : <View style={[styles.banner, styles.center]}><ActivityIndicator/></View>}
+
         <View style={styles.header}>
           <Text style={styles.title}>Meal summary</Text>
-          <Text style={styles.date}>
-            {new Date(meal.logged_at).toLocaleString()}
-          </Text>
+          <Text style={styles.date}>{new Date(meal.logged_at).toLocaleString()}</Text>
         </View>
 
         {/* Totales */}
@@ -125,9 +137,6 @@ export default function MealDetailScreen() {
                 <Text style={styles.itemConf}>conf: {Math.round(it.confidence * 100)}%</Text>
               )}
             </View>
-            {it.image_path ? (
-              <Image source={{ uri: it.image_path }} style={styles.itemImg} />
-            ) : null}
           </Card>
         ))}
       </ScrollView>
@@ -137,27 +146,24 @@ export default function MealDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
+  center: { alignItems: 'center', justifyContent: 'center' },
   banner: { width: '100%', height: 220 },
   header: { padding: 16 },
-  title: { color: '#fff', fontSize: 22, fontFamily: 'Inter-SemiBold' },
+  title: { color: '#fff', fontSize: 22, fontWeight: '700' },
   date: { color: '#9CA3AF', marginTop: 4 },
-
-  totals: { marginHorizontal: 16, padding: 16, marginBottom: 16 },
-  totalBox: { alignItems: 'center', marginBottom: 12 },
-  totalValue: { color: '#fff', fontSize: 28, fontFamily: 'Inter-Bold' },
-  totalLabel: { color: '#9CA3AF' },
-  sep: { height: 1, backgroundColor: '#374151', marginVertical: 8 },
+  totals: { marginHorizontal: 16, padding: 16, borderRadius: 16, marginBottom: 16, backgroundColor: '#191B1F' },
+  totalBox: { alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  totalValue: { color: '#fff', fontSize: 28, fontWeight: '800' },
+  totalLabel: { color: '#9CA3AF', marginTop: 4 },
+  sep: { width: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 12, marginRight: 12 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
   rowText: { color: '#9CA3AF' },
-  rowValue: { color: '#fff' },
-
-  section: { color: '#fff', fontSize: 16, fontFamily: 'Inter-SemiBold', marginHorizontal: 16, marginBottom: 8 },
-  item: { marginHorizontal: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center' },
-  itemTitle: { color: '#fff', fontFamily: 'Inter-SemiBold' },
-  itemSub: { color: '#9CA3AF', fontSize: 12 },
-  itemConf: { color: '#10B981', fontSize: 12, marginTop: 2 },
-  itemImg: { width: 56, height: 56, borderRadius: 12, marginLeft: 12 },
-
-  error: { color: '#fff', textAlign: 'center', marginTop: 32 },
+  rowValue: { color: '#fff', fontWeight: '600' },
+  section: { color: '#fff', fontSize: 18, fontWeight: '600', paddingHorizontal: 16, marginTop: 8, marginBottom: 8 },
+  item: { marginHorizontal: 16, marginBottom: 10, padding: 12, borderRadius: 14, backgroundColor: '#191B1F' },
+  itemTitle: { color: '#fff', fontWeight: '600', marginBottom: 4 },
+  itemSub: { color: '#9CA3AF' },
+  itemConf: { color: '#9CA3AF', marginTop: 4, fontSize: 12 },
+  error: { color: '#fff', textAlign: 'center', marginTop: 20 },
   link: { color: '#10B981', textAlign: 'center', marginTop: 8 },
 });

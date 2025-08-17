@@ -19,8 +19,9 @@ interface FoodItem {
 
 /** Análisis actual (draft) que se muestra en la pantalla de review (normalizado) */
 interface Analysis {
-  imagePath: string;     // <- ruta en Storage (no URL pública)
-  confidence: number;    // 0..1 o 0..10, según modelo (tratamos como número)
+  imagePath: string;     // ruta en Storage (no URL pública)
+  confidence: number;    // 0..1 ó 0..10
+  healthScore?: number;  // 1..10
   items: FoodItem[];
   totals: Totals;
 }
@@ -33,7 +34,6 @@ type Meal = {
   total_protein: number;
   total_carbs: number;
   total_fat: number;
-  /** opcionalmente venimos con items para detalle rápido */
   meal_items?: Array<{
     id: string;
     name: string;
@@ -66,18 +66,15 @@ interface NutritionState {
   clearDraft: () => void;
 }
 
-/** ---- Helpers de normalización IA ----
- * La Edge puede devolver claves como "kcal" o "calories".
- * Este helper convierte a nuestro formato interno estable.
- */
+/** ---- Helpers de normalización IA ---- */
 function normalizeAnalysis(raw: any): Omit<Analysis, 'imagePath'> {
   // Totales
   const totalsRaw = raw?.totals ?? {};
   const totals: Totals = {
     calories: Math.round(Number(totalsRaw.calories ?? totalsRaw.kcal ?? 0)),
-    protein: Math.round(Number(totalsRaw.protein ?? 0)),
-    carbs: Math.round(Number(totalsRaw.carbs ?? 0)),
-    fat: Math.round(Number(totalsRaw.fat ?? 0)),
+    protein:  Math.round(Number(totalsRaw.protein ?? 0)),
+    carbs:    Math.round(Number(totalsRaw.carbs ?? 0)),
+    fat:      Math.round(Number(totalsRaw.fat ?? 0)),
   };
 
   // Items
@@ -86,21 +83,24 @@ function normalizeAnalysis(raw: any): Omit<Analysis, 'imagePath'> {
     name: String(it?.name ?? ''),
     weight_g: Math.round(Number(it?.weight_g ?? 0)),
     calories: Math.round(Number(it?.calories ?? it?.kcal ?? 0)),
-    protein: Math.round(Number(it?.protein ?? 0)),
-    carbs: Math.round(Number(it?.carbs ?? 0)),
-    fat: Math.round(Number(it?.fat ?? 0)),
+    protein:  Math.round(Number(it?.protein ?? 0)),
+    carbs:    Math.round(Number(it?.carbs ?? 0)),
+    fat:      Math.round(Number(it?.fat ?? 0)),
     confidence: Number(it?.confidence ?? raw?.confidence ?? 1),
   }));
 
   // Confianza general
   const confidence = Number(raw?.confidence ?? 1);
 
-  return { confidence, items, totals };
+  // Health score (1..10), si no llega lo aproximamos rápido (neutro=5)
+  const healthRaw  = Number(raw?.health_score ?? raw?.healthScore ?? NaN);
+  const healthScore = Number.isFinite(healthRaw) ? Math.max(1, Math.min(10, Math.round(healthRaw))) : undefined;
+
+  return { confidence, healthScore, items, totals };
 }
 
 /** Generar un UUID robusto */
 function genId() {
-  // RN + polyfill → podemos usar crypto.randomUUID; si no, uuidv4
   try {
     // @ts-ignore
     const rnd = (globalThis as any)?.crypto?.randomUUID?.();
@@ -127,13 +127,11 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // 1) Subir imagen a Storage (bucket privado recomendado)
-      //    uploadMealImage devuelve la RUTA (p.ej. `${uid}/2025-08-14-snack-uuid.jpg`)
+      // 1) Subir imagen a Storage
       const storagePath = await uploadMealImage(user.id, fileUri, 'snack');
       if (!storagePath) throw new Error('Image upload failed');
 
       // 2) Llamar a la Edge Function (IA) con { storagePath }
-      //    La Edge extrae el uid del JWT y valida ownership
       const resp = await analyzeFoodImage(storagePath);
       if (!resp?.success) throw new Error(resp?.error ?? 'Edge-function error');
 
@@ -144,7 +142,7 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
       const draftId = genId();
       set({
         draftId,
-        draft: { imagePath: storagePath, ...norm }, // {confidence, items, totals}
+        draft: { imagePath: storagePath, ...norm },
         isAnalyzing: false,
       });
       return draftId;
@@ -164,16 +162,11 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Reinvocar Edge con { storagePath, fixPrompt }
       const resp = await analyzeFoodImage(draft.imagePath, text);
       if (!resp?.success) throw new Error(resp?.error ?? 'Edge-function error');
 
       const norm = normalizeAnalysis(resp.analysis);
-
-      set({
-        draft: { imagePath: draft.imagePath, ...norm },
-        isAnalyzing: false,
-      });
+      set({ draft: { imagePath: draft.imagePath, ...norm }, isAnalyzing: false });
     } catch (e: any) {
       set({ isAnalyzing: false, error: e?.message ?? 'Unexpected error' });
     }
@@ -218,10 +211,7 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
         image_path: draft.imagePath,
       }));
 
-      const { error: itemsErr } = await supabase
-        .from('meal_items')
-        .insert(itemsPayload);
-
+      const { error: itemsErr } = await supabase.from('meal_items').insert(itemsPayload);
       if (itemsErr) throw itemsErr;
 
       // 3) refrescar “Hoy” y limpiar draft
@@ -272,10 +262,7 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
         fat:      acc.fat      + (m.total_fat ?? 0),
       }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-      set({
-        todayMeals: (meals as Meal[]) ?? [],
-        todayTotals: totals,
-      });
+      set({ todayMeals: (meals as Meal[]) ?? [], todayTotals: totals });
     } catch (e) {
       console.error('loadTodayData error', e);
     }

@@ -20,28 +20,29 @@ interface FoodItem {
 interface FoodAnalysisResult {
   imagePath: string; // ruta en Storage (no URL pública)
   totals: { calories: number; protein: number; carbs: number; fat: number };
-  confidence: number; // puede venir 0–1 o 0–10
+  confidence: number; // 0–1 o 0–10
+  healthScore?: number; // 1–10
   items: FoodItem[];
 }
 
 export default function MealReviewScreen() {
-  /* 1 · Tomar el parámetro de la URL */
   const { draftId } = useLocalSearchParams<{ draftId: string }>();
   const router = useRouter();
 
-  /* 2 · Obtener draft, saveDraft & clearDraft del store */
-  const { draft, clearDraft, saveDraft, isAnalyzing } = useNutritionStore((s) => ({
-    draft: s.draftId === draftId ? (s.draft as FoodAnalysisResult | null) : null,
-    clearDraft: s.clearDraft,
-    saveDraft: s.saveDraft,
-    isAnalyzing: s.isAnalyzing,
-  }));
+  // ✅ Selección estable, sin objetos literales
+  const storeDraftId = useNutritionStore((s) => s.draftId);
+  const draft        = useNutritionStore((s) => s.draft) as FoodAnalysisResult | null;
+  const clearDraft   = useNutritionStore((s) => s.clearDraft);
+  const saveDraft    = useNutritionStore((s) => s.saveDraft);
+  const isAnalyzing  = useNutritionStore((s) => s.isAnalyzing);
+
+  // solo mostramos si el draft que hay cargado coincide con la URL
+  const activeDraft = storeDraftId === draftId ? draft : null;
 
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  /* 3 · Si no hay draft válido mostrar fallback */
-  if (!draft) {
+  if (!activeDraft) {
     return (
       <View style={[styles.flex1, styles.center, styles.bgBlack]}>
         <Text style={styles.textWhite}>Draft not found</Text>
@@ -49,9 +50,8 @@ export default function MealReviewScreen() {
     );
   }
 
-  const { imagePath, totals, confidence, items } = draft;
+  const { imagePath, totals, confidence, healthScore, items } = activeDraft;
 
-  // normaliza confidence a barra 0–1 y score 0–10
   const { progress, score10 } = useMemo(() => {
     const isZeroToOne = confidence <= 1;
     const p = isZeroToOne ? confidence : confidence / 10;
@@ -59,19 +59,22 @@ export default function MealReviewScreen() {
     return { progress: Math.max(0, Math.min(1, p)), score10: Math.max(0, Math.min(10, s)) };
   }, [confidence]);
 
-  // Resolver signed URL para el banner
+  const health10 = useMemo(() => {
+    if (typeof healthScore === 'number' && !Number.isNaN(healthScore)) {
+      return Math.max(1, Math.min(10, Math.round(healthScore)));
+    }
+    return 5;
+  }, [healthScore]);
+
   useEffect(() => {
     let live = true;
     (async () => {
       const url = await signedImageUrl(imagePath, 300);
       if (live) setBannerUrl(url);
     })();
-    return () => {
-      live = false;
-    };
+    return () => { live = false; };
   }, [imagePath]);
 
-  /* Helper para las tarjetas de macros */
   const MacroCard = ({ label, value, unit = 'kcal' }: { label: string; value: number; unit?: string }) => (
     <View style={styles.macroCard}>
       <Text style={styles.macroValue}>{value}</Text>
@@ -81,9 +84,7 @@ export default function MealReviewScreen() {
     </View>
   );
 
-  const handleFix = () => {
-    router.push('/(tabs)/nutrition/fix-modal');
-  };
+  const handleFix = () => router.push('/(tabs)/nutrition/fix-modal');
 
   const handleSave = async () => {
     try {
@@ -128,6 +129,10 @@ export default function MealReviewScreen() {
         <Text style={[styles.textWhite, styles.mt12]}>Confidence: {score10}/10</Text>
         <ProgressBar progress={progress} color="#00E676" style={styles.progressBar} />
 
+        {/* Salud de la comida */}
+        <Text style={[styles.textWhite, styles.mt16]}>Health score: {health10}/10</Text>
+        <ProgressBar progress={health10 / 10} color="#3B82F6" style={styles.progressBar} />
+
         {/* Lista de ítems */}
         <Text style={[styles.textWhite, styles.mt16, styles.mb8, styles.textLg]}>Detected foods</Text>
         {items.map((it, i) => (
@@ -139,7 +144,7 @@ export default function MealReviewScreen() {
 
         {/* Botones Fix & Save */}
         <View style={[styles.row, styles.mt24, styles.spaceBetween]}>
-          <TouchableOpacity style={styles.fixBtn} onPress={handleFix} disabled={isAnalyzing || saving}>
+          <TouchableOpacity style={styles.fixBtn} onPress={handleFix}>
             <Ionicons name="create-outline" size={18} color="#fff" />
             <Text style={[styles.textWhite, styles.ml8]}>Fix ⭐</Text>
           </TouchableOpacity>
@@ -149,11 +154,7 @@ export default function MealReviewScreen() {
             onPress={handleSave}
             disabled={isAnalyzing || saving}
           >
-            {saving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.saveText}>Save</Text>
-            )}
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save</Text>}
           </TouchableOpacity>
         </View>
       </View>
@@ -221,8 +222,6 @@ const styles = StyleSheet.create({
     minWidth: 120,
     alignItems: 'center',
   },
-  disabledBtn: {
-    opacity: 0.6,
-  },
+  disabledBtn: { opacity: 0.6 },
   saveText: { color: '#fff', fontWeight: '700' },
 });
