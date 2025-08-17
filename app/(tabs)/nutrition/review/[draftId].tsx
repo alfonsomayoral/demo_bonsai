@@ -39,20 +39,21 @@ export default function MealReviewScreen() {
   const [servings, setServings]   = useState<number>(1);
   const [saving, setSaving]       = useState(false);
 
-  const activeDraft = storeDraftId === draftId ? draft : null;
-  if (!activeDraft) {
-    return (
-      <View style={[styles.flex1, styles.center, styles.bgBlack]}>
-        <Text style={styles.textWhite}>Draft not found</Text>
-      </View>
-    );
-  }
-
-  const { imagePath, totals, confidence, healthScore, items } = activeDraft;
+  // Evitar early-return para no romper el orden de hooks:
+  const hasDraft   = storeDraftId === draftId && !!draft;
+  const imagePath  = hasDraft ? (draft as FoodAnalysisResult).imagePath : '';
+  const totals     = hasDraft ? (draft as FoodAnalysisResult).totals : { kcal: 0, protein: 0, carbs: 0, fat: 0 };
+  const confidence = hasDraft ? (draft as FoodAnalysisResult).confidence : 0;
+  const healthScore = hasDraft ? (draft as FoodAnalysisResult).healthScore : undefined;
+  const items      = hasDraft ? (draft as FoodAnalysisResult).items : [];
 
   useEffect(() => {
     let live = true;
     (async () => {
+      if (!imagePath) {
+        setBannerUrl(null);
+        return;
+      }
       const url = await signedImageUrl(imagePath, 300);
       if (live) setBannerUrl(url);
     })();
@@ -60,7 +61,7 @@ export default function MealReviewScreen() {
   }, [imagePath]);
 
   // Normalizaciones (kcal vs calories; confidence 0–1 vs 1–10)
-  const baseKcal = totals.kcal ?? (totals as any).calories ?? 0;
+  const baseKcal = (totals as any).kcal ?? (totals as any).calories ?? 0;
   const conf0to1 = confidence <= 1 ? Math.max(0, Math.min(1, confidence)) : Math.max(0, Math.min(10, confidence)) / 10;
   const conf10   = Math.round(conf0to1 * 10);
   const health10 = typeof healthScore === 'number' && !Number.isNaN(healthScore) ? Math.max(0, Math.min(10, Math.round(healthScore))) : 5;
@@ -70,9 +71,9 @@ export default function MealReviewScreen() {
     const mul = Math.max(1, servings);
     return {
       kcal: Math.round(baseKcal * mul),
-      protein: Math.round(totals.protein * mul),
-      carbs: Math.round(totals.carbs * mul),
-      fat: Math.round(totals.fat * mul),
+      protein: Math.round((totals as any).protein * mul),
+      carbs: Math.round((totals as any).carbs * mul),
+      fat: Math.round((totals as any).fat * mul),
     };
   }, [baseKcal, totals, servings]);
 
@@ -92,13 +93,14 @@ export default function MealReviewScreen() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const mealId = await saveDraft(servings); // ⟵ guarda aplicando multiplicador
+      const mealId = await saveDraft(servings); // guarda aplicando multiplicador
       if (!mealId) {
         setSaving(false);
         return;
       }
       clearDraft();
-      router.replace(`/(tabs)/nutrition/detail/${mealId}`);
+      // Ir a la pantalla principal de Nutrition (Recent Uploads mostrará la nueva card)
+      router.replace('/(tabs)/nutrition');
     } finally {
       setSaving(false);
     }
@@ -221,7 +223,7 @@ export default function MealReviewScreen() {
   );
 }
 
-const CARD_BG = 'rgba(255,255,255,0.06)';
+const CARD_BG = '#191B1F';
 const TEXT_MID = '#D1D5DB';
 
 const styles = StyleSheet.create({
