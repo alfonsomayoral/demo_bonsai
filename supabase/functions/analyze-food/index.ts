@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
-import { serve } from "std/http/server.ts";
-import { createClient } from "@supabase/supabase-js";
-import { encodeBase64 } from "std/encoding/base64.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,7 +27,7 @@ serve(async (req) => {
       );
     }
 
-    // 1) Auth: obtener user desde el JWT del header
+    // Auth: obtener user desde el JWT
     const auth = req.headers.get("Authorization") ?? "";
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: auth } },
@@ -40,9 +40,7 @@ serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 },
       );
     }
-    const uid = userData.user.id;
 
-    // 2) Leer body
     const { storagePath, fixPrompt } = await req.json();
     if (!storagePath) {
       return new Response(
@@ -51,7 +49,7 @@ serve(async (req) => {
       );
     }
 
-    // 3) Descargar imagen del bucket (privado recomendado) con service role
+    // Descargar imagen del bucket (privado recomendado) con service role
     const serviceClient = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
     const { data: fileData, error: dlErr } = await serviceClient
       .storage
@@ -65,19 +63,27 @@ serve(async (req) => {
       );
     }
 
-    const ab          = await fileData.arrayBuffer();
-    const bytes       = new Uint8Array(ab);
+    const ab    = await fileData.arrayBuffer();
+    const bytes = new Uint8Array(ab);
+
+    // Blindaje: archivo vacío
+    if (!bytes || bytes.byteLength === 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Image is empty (0 bytes) or unreadable" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 },
+      );
+    }
+
     const b64         = encodeBase64(bytes);
     const contentType = (fileData as Blob).type || "image/jpeg";
     const dataUrl     = `data:${contentType};base64,${b64}`;
 
-    // 4) Prompt con JSON estricto (en JSON mode) e incluir health_score 1–10
     const systemPrompt = `
 You are a nutrition analysis expert. You get a food photo and must output precise, machine-readable nutrition.
 Return ONLY valid JSON with this exact shape:
 {
-  "confidence": 0.0,                 // 0..1 overall confidence
-  "health_score": 0,                 // integer 1..10 (10 = very healthy)
+  "confidence": 0.0,
+  "health_score": 0,
   "items": [
     { "name": "", "weight_g": 0, "kcal": 0, "protein": 0, "carbs": 0, "fat": 0, "confidence": 0.0 }
   ],
@@ -130,7 +136,6 @@ Rules:
     try {
       analysis = JSON.parse(content);
     } catch {
-      // Si viniese envuelto en marcas, intentar extraer bloque JSON
       const m = content.match(/\{[\s\S]*\}$/);
       if (m) analysis = JSON.parse(m[0]);
     }
@@ -142,7 +147,7 @@ Rules:
     }
 
     return new Response(
-      JSON.stringify({ success: true, analysis, usage: aiJson.usage, userId: uid }),
+      JSON.stringify({ success: true, analysis, usage: aiJson.usage }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
     );
   } catch (err: any) {

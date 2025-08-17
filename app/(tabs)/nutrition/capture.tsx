@@ -27,20 +27,17 @@ const FRAME_SIZE = width * 0.7;
 type Mode = 'photo' | 'barcode' | 'label' | 'library';
 
 export default function CaptureScreen() {
-  /* ─────────────────────── refs & state ─────────────────────── */
   const cameraRef                         = useRef<CameraView>(null);
   const [permission, requestPermission]   = useCameraPermissions();
   const [flash, setFlash]                 = useState<FlashMode>('off');
   const [mode, setMode]                   = useState<Mode>('photo');
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isBusy, setIsBusy]               = useState(false);
-  const [barcodeLocked, setBarcodeLocked] = useState(false); // evita bucles en onBarcodeScanned
+  const [barcodeLocked, setBarcodeLocked] = useState(false);
 
   const router = useRouter();
 
-  /* ─────────────────────── helpers ──────────────────────────── */
   const compressToJpeg = useCallback(async (uri: string) => {
-    // Convertimos SIEMPRE a JPEG y reducimos tamaño para estar <5MB
     const { uri: out } = await ImageManipulator.manipulateAsync(
       uri,
       [{ resize: { width: 1600 } }],
@@ -51,7 +48,6 @@ export default function CaptureScreen() {
 
   const goToAnalyzing = useCallback(
     (fileUri: string) => {
-      // Navegamos y dejamos que analyzing.tsx haga el análisis con IA
       router.replace({
         pathname: '/(tabs)/nutrition/analyzing',
         params: { fileUri },
@@ -66,6 +62,7 @@ export default function CaptureScreen() {
       setIsBusy(true);
 
       const res = await ImagePicker.launchImageLibraryAsync({
+        // Volvemos a la API retrocompatible para evitar el error de tipos
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
       });
@@ -85,7 +82,6 @@ export default function CaptureScreen() {
       if (isBusy || !isCameraReady || !cameraRef.current) return;
       setIsBusy(true);
 
-      // API soportada por CameraView en SDK 53
       const photo = await cameraRef.current.takePictureAsync({ quality: 1 });
       if (!photo?.uri) throw new Error('No photo captured');
 
@@ -102,19 +98,16 @@ export default function CaptureScreen() {
     (result: BarcodeScanningResult) => {
       if (barcodeLocked) return;
       setBarcodeLocked(true);
-
       const code = result?.data ?? '';
       if (!code) {
         setBarcodeLocked(false);
         return;
       }
-      // Aquí podrías navegar a una pantalla de búsqueda por código de barras
       Alert.alert('Barcode', code, [{ text: 'OK', onPress: () => setBarcodeLocked(false) }]);
     },
     [barcodeLocked]
   );
 
-  /* ─────────────────────── UI permiso cámara ─────────────────── */
   if (!permission) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -134,7 +127,6 @@ export default function CaptureScreen() {
     );
   }
 
-  /* ─────────────────────── estilos del marco ─────────────────── */
   const cornerMap: Record<'tl' | 'tr' | 'bl' | 'br', StyleProp<ViewStyle>> = {
     tl: styles.corner_tl,
     tr: styles.corner_tr,
@@ -142,7 +134,6 @@ export default function CaptureScreen() {
     br: styles.corner_br,
   };
 
-  /* ─────────────────────── render ────────────────────────────── */
   return (
     <View style={styles.container}>
       <CameraView
@@ -151,7 +142,6 @@ export default function CaptureScreen() {
         facing="back"
         flash={flash}
         onCameraReady={() => setIsCameraReady(true)}
-        // Habilitamos escaneo de código sólo cuando está activo ese modo
         barcodeScannerSettings={
           mode === 'barcode'
             ? { barcodeTypes: ['qr', 'ean13', 'upc_a', 'upc_e', 'code128'] }
@@ -160,14 +150,12 @@ export default function CaptureScreen() {
         onBarcodeScanned={mode === 'barcode' ? onBarcodeScanned : undefined}
       />
 
-      {/* Marco visual */}
       <View style={styles.frame}>
         {(['tl', 'tr', 'bl', 'br'] as const).map((pos) => (
           <View key={pos} style={[styles.corner, cornerMap[pos]]} />
         ))}
       </View>
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={28} color="#fff" />
@@ -176,7 +164,6 @@ export default function CaptureScreen() {
         <Ionicons name="ellipsis-horizontal" size={28} color="#fff" />
       </View>
 
-      {/* Modos */}
       <View style={styles.bottomBar}>
         {(
           [
@@ -209,7 +196,6 @@ export default function CaptureScreen() {
         ))}
       </View>
 
-      {/* Disparador y flash */}
       {mode === 'photo' && (
         <TouchableOpacity
           style={[styles.shutter, (isBusy || !isCameraReady) && styles.shutterDisabled]}
@@ -228,7 +214,8 @@ export default function CaptureScreen() {
   );
 }
 
-/* ─────────────────────── estilos ────────────────────────────── */
+const { height } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   center: { alignItems: 'center', justifyContent: 'center' },
@@ -249,8 +236,10 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
 
-  frame: { position: 'absolute', top: '25%', left: (width - FRAME_SIZE) / 2,
-           width: FRAME_SIZE, height: FRAME_SIZE },
+  frame: {
+    position: 'absolute', top: height * 0.2, left: (width - FRAME_SIZE) / 2,
+    width: FRAME_SIZE, height: FRAME_SIZE,
+  },
   corner:     { position: 'absolute', width: 40, height: 40, borderColor: '#fff', borderWidth: 3 },
   corner_tl:  { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
   corner_tr:  { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },

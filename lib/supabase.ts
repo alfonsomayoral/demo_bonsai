@@ -30,11 +30,8 @@ export type Database = {
           age: number | null;
         };
         Insert: Partial<Database['public']['Tables']['users']['Row']> & {
-          id: string; email: string;
-          unit_system: 'metric' | 'imperial';
-          goal_type: 'cut' | 'maintain' | 'bulk';
-          gym_sessions_per_week: number; runs_regularly: boolean;
-          meals_per_day: number; kcal_target: number;
+          id: string; email: string; unit_system: 'metric' | 'imperial'; goal_type: 'cut' | 'maintain' | 'bulk';
+          gym_sessions_per_week: number; runs_regularly: boolean; meals_per_day: number; kcal_target: number;
         };
         Update: Partial<Database['public']['Tables']['users']['Row']>;
       };
@@ -118,7 +115,9 @@ export type Database = {
           volume: number | null;
           performed_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['exercise_sets']['Row'], 'id' | 'created_at' | 'volume' | 'performed_at'> & { created_at?: string; volume?: number | null; performed_at?: string };
+        Insert: Omit<Database['public']['Tables']['exercise_sets']['Row'], 'id' | 'created_at' | 'volume' | 'performed_at'> & {
+          created_at?: string; volume?: number | null; performed_at?: string
+        };
         Update: Partial<Database['public']['Tables']['exercise_sets']['Row']>;
       };
       routines: {
@@ -131,7 +130,9 @@ export type Database = {
           updated_at: string;
           last_done: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['routines']['Row'], 'id' | 'created_at' | 'updated_at'> & { created_at?: string; updated_at?: string };
+        Insert: Omit<Database['public']['Tables']['routines']['Row'], 'id' | 'created_at' | 'updated_at'> & {
+          created_at?: string; updated_at?: string
+        };
         Update: Partial<Database['public']['Tables']['routines']['Row']>;
       };
       routine_exercises: {
@@ -166,20 +167,63 @@ export type Database = {
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 export const isSupabaseConfigured = (): boolean => Boolean(supabaseUrl && supabaseAnonKey);
 
-/*──────────────────────── Helpers de Storage/IA ─────────────────*/
+/*──────────────────────── Aliases & mocks (opcionales) ──────────*/
+export type Exercise         = Database['public']['Tables']['exercises']['Row'];
+export type Routine          = Database['public']['Tables']['routines']['Row'];
+export type ExerciseSet      = Database['public']['Tables']['exercise_sets']['Row'];
+export type SessionExercise  = Database['public']['Tables']['session_exercises']['Row'];
+export type WorkoutSession   = Database['public']['Tables']['workout_sessions']['Row'];
 
-function b64ToUint8Array(b64: string): Uint8Array {
-  const binary = globalThis.atob ? atob(b64) : Buffer.from(b64, 'base64').toString('binary');
-  const len = binary.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
+export const mockExercises: Exercise[] = [
+  { id: '0001', user_id: null, name: 'Push-Up', muscle_group: 'chest', description: 'Classic body-weight push movement.', image_url: null, difficulty: 'beginner' },
+];
+
+export const mockRoutines: Routine[] = [
+  { id: 'rt-1', user_id: 'demo', name: 'Push Day', color: '#00E676', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), last_done: null },
+];
+
+export const mockWorkoutSession: WorkoutSession = {
+  id: 'ws-1',
+  user_id: 'demo',
+  start_time: new Date().toISOString(),
+  finished_at: null,
+  duration_sec: null,
+  total_volume: 0,
+};
+
+/*──────────────────────── Helpers internos ─────────────────────*/
 
 /**
- * Lee un fichero local con expo-file-system, lo convierte a JPEG si ya lo es,
- * y sube un buffer binario a Supabase Storage (bucket: meal-images).
- * Devuelve la RUTA (path) en el bucket.
+ * Convierte una cadena base64 a Uint8Array de forma compatible con RN/Expo.
+ * Intenta usar atob; si no existe, intenta Buffer; si no, lanza error.
+ */
+function base64ToUint8Array(base64: string): Uint8Array {
+  try {
+    if (typeof atob === 'function') {
+      const binary = atob(base64);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+    // @ts-ignore - Buffer puede existir en el runtime sin tipo global
+    if (typeof Buffer !== 'undefined') {
+      // @ts-ignore
+      const buf = Buffer.from(base64, 'base64');
+      return new Uint8Array(buf);
+    }
+    throw new Error('No base64 decoder available in this runtime');
+  } catch (e) {
+    throw new Error('Failed to decode base64 to bytes');
+  }
+}
+
+/*──────────────────────── Helpers de Storage/IA ─────────────────*/
+
+/**
+ * Sube una imagen al bucket `meal-images` y devuelve la RUTA (path) en Storage.
+ * Lee la URI local en base64 (expo-file-system) → convierte a Uint8Array → sube bytes.
+ * Valida que el tamaño sea > 0 antes de subir.
  */
 export const uploadMealImage = async (
   userId: string,
@@ -187,21 +231,29 @@ export const uploadMealImage = async (
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack'
 ): Promise<string | null> => {
   try {
-    // 1) Comprobar que el archivo existe y no está vacío
+    // (0) Info opcional: verificar existencia/tamaño del archivo local
     const info = await FileSystem.getInfoAsync(imageUri, { size: true });
     if (!info.exists) throw new Error('Local image file not found');
-    if (typeof info.size === 'number' && info.size <= 0) throw new Error('Local image is empty');
+    // Nota: algunas plataformas no devuelven size correcto; aun así validaremos después.
 
-    // 2) Leer como base64 y convertir a bytes
+    // (1) Leer como base64
     const base64 = await FileSystem.readAsStringAsync(imageUri, { encoding: FileSystem.EncodingType.Base64 });
-    if (!base64) throw new Error('Failed to read image (base64)');
-    const bytes = b64ToUint8Array(base64);
+    if (!base64 || base64.length < 10) {
+      throw new Error('Local image is empty or unreadable');
+    }
 
-    // 3) Nombre único (con userId como prefijo de carpeta)
-    const date = new Date().toISOString().slice(0, 10);
+    // (2) Pasar a bytes
+    const bytes = base64ToUint8Array(base64);
+    if (!bytes || bytes.byteLength === 0) {
+      throw new Error('Image bytes are empty');
+    }
+
+    // (3) Nombre único y ruta
+    const d = new Date();
+    const date = d.toISOString().slice(0, 10);
     const name = `${userId}/${date}-${mealType}-${uuidv4()}.jpg`;
 
-    // 4) Subir a Storage
+    // (4) Subir a Storage como bytes (Uint8Array)
     const { error } = await supabase
       .storage
       .from('meal-images')
