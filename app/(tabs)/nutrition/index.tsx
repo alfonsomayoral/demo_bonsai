@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 24,
     fontFamily: 'Inter-SemiBold',
     marginTop: 8,
     marginBottom: 12,
