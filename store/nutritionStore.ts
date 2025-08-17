@@ -61,7 +61,7 @@ interface NutritionState {
   // Acciones
   analyzeNewPhoto: (fileUri: string) => Promise<string | null>;
   fixDraft: (text: string) => Promise<void>;
-  saveDraft: () => Promise<string | null>;
+  saveDraft: (servings?: number) => Promise<string | null>; // ← acepta raciones opcionales
   loadTodayData: () => Promise<void>;
   clearDraft: () => void;
 }
@@ -173,7 +173,7 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
   },
 
   /* --------------------------- guardar en BD ------------------------ */
-  saveDraft: async () => {
+  saveDraft: async (servings = 1) => {
     const { draft } = get();
     if (!draft) return null;
 
@@ -181,16 +181,24 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
+      // Multiplicador de raciones (entero, mínimo 1)
+      const mul = Math.max(1, Math.floor(servings));
+
+      // Totales con multiplicador
+      const totalsMul = {
+        total_kcal:    Math.round(draft.totals.calories * mul),
+        total_protein: Math.round(draft.totals.protein  * mul),
+        total_carbs:   Math.round(draft.totals.carbs    * mul),
+        total_fat:     Math.round(draft.totals.fat      * mul),
+      };
+
       // 1) Insertar meal
       const { data: mealRow, error: mealErr } = await supabase
         .from('meals')
         .insert({
           user_id: user.id,
           source_method: 'photo',
-          total_kcal: Math.round(draft.totals.calories),
-          total_protein: Math.round(draft.totals.protein),
-          total_carbs: Math.round(draft.totals.carbs),
-          total_fat: Math.round(draft.totals.fat),
+          ...totalsMul,
         })
         .select()
         .single();
@@ -198,21 +206,23 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
       if (mealErr) throw mealErr;
       const mealId: string = mealRow.id;
 
-      // 2) Insertar items (guardando la RUTA en image_path)
+      // 2) Insertar items multiplicados (guardando la RUTA en image_path)
       const itemsPayload = draft.items.map((it) => ({
         meal_id: mealId,
         name: it.name,
-        weight_g: Math.round(it.weight_g),
-        kcal: Math.round(it.calories),
-        protein: Math.round(it.protein),
-        carbs: Math.round(it.carbs),
-        fat: Math.round(it.fat),
+        weight_g: Math.round(it.weight_g * mul),
+        kcal: Math.round(it.calories * mul),
+        protein: Math.round(it.protein * mul),
+        carbs: Math.round(it.carbs * mul),
+        fat: Math.round(it.fat * mul),
         confidence: it.confidence,
         image_path: draft.imagePath,
       }));
 
-      const { error: itemsErr } = await supabase.from('meal_items').insert(itemsPayload);
-      if (itemsErr) throw itemsErr;
+      if (itemsPayload.length > 0) {
+        const { error: itemsErr } = await supabase.from('meal_items').insert(itemsPayload);
+        if (itemsErr) throw itemsErr;
+      }
 
       // 3) refrescar “Hoy” y limpiar draft
       await get().loadTodayData();
