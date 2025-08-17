@@ -44,6 +44,15 @@ const yesterdayYmd = () => {
   return d.toISOString().slice(0, 10);
 };
 
+/* Construye la URL pública del objeto en el bucket meal-images */
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL as string | undefined;
+const publicMealImageUrl = (path?: string | null) => {
+  if (!path || !SUPABASE_URL) return null;
+  const base = SUPABASE_URL.replace(/\/+$/, '');
+  // Nota: el path de Storage no empieza con '/', así que lo concatenamos tal cual
+  return `${base}/storage/v1/object/public/meal-images/${path}`;
+};
+
 /* ------------------------- componente macro ------------------------ */
 function MacroRing({
   label,
@@ -151,18 +160,21 @@ export default function NutritionHome() {
   /* lista mostrable (BD o demo) */
   const listMeals =
     meals && meals.length
-      ? meals.map((m: any) => ({
-          id: m.id,
-          image:
-            m.meal_items?.find((it: any) => !!it.image_path)?.image_path ??
-            'https://images.unsplash.com/photo-1546069901-eacef0df6022?auto=format&fit=crop&w=1200&q=60',
-          title: m.meal_items?.[0]?.name ?? 'Logged meal',
-          kcal: m.total_kcal ?? 0,
-          protein: m.total_protein ?? 0,
-          carbs: m.total_carbs ?? 0,
-          fat: m.total_fat ?? 0,
-          time: formatTime(m.logged_at),
-        }))
+      ? meals.map((m: any) => {
+          const imagePath = m.meal_items?.find((it: any) => !!it.image_path)?.image_path ?? null;
+          const imageUrl  = publicMealImageUrl(imagePath) ??
+            'https://images.unsplash.com/photo-1546069901-eacef0df6022?auto=format&fit=crop&w=1200&q=60';
+          return {
+            id: m.id,
+            image: imageUrl,
+            title: m.meal_items?.[0]?.name ?? 'Logged meal',
+            kcal: m.total_kcal ?? 0,
+            protein: m.total_protein ?? 0,
+            carbs: m.total_carbs ?? 0,
+            fat: m.total_fat ?? 0,
+            time: formatTime(m.logged_at),
+          };
+        })
       : [
           {
             id: 'demo1',
@@ -217,7 +229,7 @@ export default function NutritionHome() {
         <View style={styles.macroRow}>
           <MacroRing
             label="Protein"
-            iconName="food-drumstick-outline"
+            iconName="food-drumstick"
             value={consumed.protein}
             target={TARGETS.protein}
             color="#FF6B6B"
