@@ -4,13 +4,13 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 
 import { ProgressRing } from '@/components/nutrition/ProgressRing';
 import { MealCard } from '@/components/nutrition/MealCard';
 import { FloatingCameraButton } from '@/components/nutrition/FloatingCameraButton';
 import { WaterCard } from '@/components/nutrition/WaterCard';
 import { useNutritionStore } from '@/store/nutritionStore';
+import { supabase } from '@/lib/supabase';
 
 /* --------------------- objetivos por defecto ---------------------- */
 const TARGETS = {
@@ -23,10 +23,13 @@ const TARGETS = {
 /* ------------------------- helpers varios ------------------------- */
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
-const formatTime = (iso?: string) => {
+const formatDateTime = (iso?: string) => {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const d = new Date(iso);
+    const date = d.toLocaleDateString();
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `${date} ${time}`;
   } catch {
     return '';
   }
@@ -85,20 +88,46 @@ function MacroRing({
 
 /* --------------------------- pantalla home -------------------------- */
 export default function NutritionHome() {
-  const router = useRouter();
-
-  // Slices por separado
-  const meals  = useNutritionStore((s: any) => s.todayMeals || []);
-  const totals = useNutritionStore((s: any) => s.todayTotals || { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  // Selectores separados para Zustand v5 (evita snapshots cambiantes)
+  const meals         = useNutritionStore((s: any) => s.todayMeals || []);
+  const totals        = useNutritionStore((s: any) => s.todayTotals || { calories: 0, protein: 0, carbs: 0, fat: 0 });
   const loadTodayData = useNutritionStore((s: any) => s.loadTodayData);
 
   const [streak, setStreak] = useState<number>(0);
+  const [recentMeals, setRecentMeals] = useState<any[]>([]); // ⬅️ últimas 3 comidas (cualquier día)
 
-  // Carga datos del día solo una vez al montar
+  // Carga datos del día al montar
   useEffect(() => {
     if (typeof loadTodayData === 'function') loadTodayData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cargar SIEMPRE las 3 últimas comidas del usuario (se refresca cuando cambian las comidas del día)
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setRecentMeals([]);
+          return;
+        }
+        const { data, error } = await supabase
+          .from('meals')
+          .select('id, logged_at, total_kcal, total_protein, total_carbs, total_fat, meal_items(name, image_path)')
+          .eq('user_id', user.id)
+          .order('logged_at', { ascending: false })
+          .limit(3);
+
+        if (error || !data) {
+          setRecentMeals([]);
+          return;
+        }
+        setRecentMeals(data);
+      } catch {
+        setRecentMeals([]);
+      }
+    })();
+  }, [meals]);
 
   // Racha basada en si hay comidas hoy
   useEffect(() => {
@@ -143,7 +172,7 @@ export default function NutritionHome() {
     })();
   }, [meals]);
 
-  /* consumido y progreso */
+  /* consumido y progreso (para los anillos objetivo del día) */
   const consumed = useMemo(
     () => ({
       calories: totals?.calories ?? 0,
@@ -154,51 +183,25 @@ export default function NutritionHome() {
     [totals]
   );
 
-  const kcalLeft     = Math.max(0, TARGETS.calories - consumed.calories);
   const kcalProgress = clamp01(consumed.calories / TARGETS.calories);
 
-  /* lista mostrable (BD o demo) */
-  const listMeals =
-    meals && meals.length
-      ? meals.map((m: any) => {
-          const imagePath = m.meal_items?.find((it: any) => !!it.image_path)?.image_path ?? null;
-          const imageUrl  = publicMealImageUrl(imagePath) ??
-            'https://images.unsplash.com/photo-1546069901-eacef0df6022?auto=format&fit=crop&w=1200&q=60';
-          return {
-            id: m.id,
-            image: imageUrl,
-            title: m.meal_items?.[0]?.name ?? 'Logged meal',
-            kcal: m.total_kcal ?? 0,
-            protein: m.total_protein ?? 0,
-            carbs: m.total_carbs ?? 0,
-            fat: m.total_fat ?? 0,
-            time: formatTime(m.logged_at),
-          };
-        })
-      : [
-          {
-            id: 'demo1',
-            image:
-              'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=800&q=80',
-            title: 'Caesar Salad',
-            kcal: 133,
-            protein: 12,
-            carbs: 8,
-            fat: 5,
-            time: '9:00am',
-          },
-          {
-            id: 'demo2',
-            image:
-              'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80',
-            title: 'Sweet Corn',
-            kcal: 456,
-            protein: 18,
-            carbs: 60,
-            fat: 19,
-            time: '9:00am',
-          },
-        ];
+  /* lista mostrable: SIEMPRE las 3 últimas comidas registradas (sin demos) */
+  const listMeals = recentMeals.map((m: any) => {
+    const imagePath = m.meal_items?.find((it: any) => !!it.image_path)?.image_path ?? null;
+    const imageUrl  = publicMealImageUrl(imagePath) ??
+      'https://images.unsplash.com/photo-1546069901-eacef0df6022?auto=format&fit=crop&w=1200&q=60';
+    return {
+      id: m.id,
+      image: imageUrl,
+      title: m.meal_items?.[0]?.name ?? 'Logged meal',
+      kcal: m.total_kcal ?? 0,
+      protein: m.total_protein ?? 0,
+      carbs: m.total_carbs ?? 0,
+      fat: m.total_fat ?? 0,
+      // ⬇️ ahora fecha + hora (antes solo hora)
+      time: formatDateTime(m.logged_at),
+    };
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -208,9 +211,9 @@ export default function NutritionHome() {
           <Text style={styles.streakEmoji}>🔥</Text>
           <Text style={styles.streakText}>{streak}</Text>
         </View>
+
         {/* --------- Card principal con anillo de calorías --------- */}
         <View style={styles.kcalCard}>
-          {/* Título "Calories" en la parte superior derecha */}
           <Text style={styles.kcalTitle}>Calories Target</Text>
           
           <View style={{ flex: 1 }}>
@@ -219,7 +222,6 @@ export default function NutritionHome() {
 
           <View style={styles.kcalRing}>
             <ProgressRing size={110} stroke={12} progress={kcalProgress} color="#10B981" trackColor="#1F2937">
-              {/* dentro del ring solo icono */}
               <MaterialCommunityIcons name="fire-circle" size={30} color="#10B981" />
             </ProgressRing>
           </View>
@@ -265,7 +267,7 @@ export default function NutritionHome() {
             protein={m.protein}
             carbs={m.carbs}
             fat={m.fat}
-            time={m.time}
+            time={m.time} // ahora incluye fecha + hora
           />
         ))}
 
