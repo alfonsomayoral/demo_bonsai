@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { signedImageUrl } from '@/lib/supabase';
 import { useNutritionStore } from '@/store/nutritionStore';
-import { NumberPad } from '@/components/ui/NumberPad';
+import { WeightPad } from '@/components/nutrition/WeightPad';
 
 type FoodItem = {
   name: string;
@@ -57,7 +57,7 @@ export default function MealReviewScreen() {
   // Edición por item
   const [edited, setEdited]           = useState<FoodItem[]>([]);
   const [editingIdx, setEditingIdx]   = useState<number | null>(null);
-  const [numberPadVisible, setNPVis]  = useState(false);
+  const [weightPadVisible, setWPVis]  = useState(false);
 
   // Evitar early-return para no romper orden de hooks
   const hasDraft    = storeDraftId === draftId && !!draft;
@@ -83,7 +83,7 @@ export default function MealReviewScreen() {
     return () => { live = false; };
   }, [imagePath]);
 
-  // Normalizaciones (kcal vs calories; confidence 0–1 vs 1–10)
+  // Normalizaciones
   const baseKcal = (totals as any).kcal ?? (totals as any).calories ?? 0;
   const conf0to1 = confidence <= 1 ? Math.max(0, Math.min(1, confidence)) : Math.max(0, Math.min(10, confidence)) / 10;
   const conf10   = Math.round(conf0to1 * 10);
@@ -139,8 +139,6 @@ export default function MealReviewScreen() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      // Nota: saveDraft(servings) guarda usando el draft del store.
-      // Si en el futuro queremos persistir las ediciones locales, habrá que sincronizar edited -> store.draft antes.
       const mealId = await saveDraft(servings);
       if (!mealId) { setSaving(false); return; }
       clearDraft();
@@ -221,25 +219,23 @@ export default function MealReviewScreen() {
     }));
   }, [edited, servings]);
 
-  // Abrir NumberPad para editar gramos del item
+  // Abrir WeightPad para editar gramos del item
   const openEdit = (idx: number) => {
     setEditingIdx(idx);
-    setNPVis(true);
+    setWPVis(true);
   };
 
-  // Confirmar valor de gramos desde NumberPad
-  const onNumberPadConfirm = (weight: number, _reps: number) => {
+  // Confirmar valor de gramos desde WeightPad
+  const onWeightPadConfirm = (grams: number) => {
     if (editingIdx === null) return;
-    const grams = Math.max(0, Math.round(weight || 0));
 
     setEdited((prev) => {
       const next = [...prev];
       const base = baseItems[editingIdx]; // referencia original del modelo
       if (!base || base.weight_g <= 0) {
-        // si no hay base válida, solo sustituimos el peso
         next[editingIdx] = { ...next[editingIdx], weight_g: grams };
         return next;
-        }
+      }
       const factor = grams / base.weight_g;
 
       next[editingIdx] = {
@@ -253,12 +249,12 @@ export default function MealReviewScreen() {
       return next;
     });
 
-    setNPVis(false);
+    setWPVis(false);
     setEditingIdx(null);
   };
 
-  const onNumberPadClose = () => {
-    setNPVis(false);
+  const onWeightPadClose = () => {
+    setWPVis(false);
     setEditingIdx(null);
   };
 
@@ -388,7 +384,7 @@ export default function MealReviewScreen() {
               </View>
             </View>
 
-            {/* botón lápiz */}
+            {/* botón lápiz -> abre WeightPad */}
             <TouchableOpacity style={styles.pencilBtn} onPress={() => openEdit(it.idx)}>
               <MaterialCommunityIcons name="pencil" size={18} color="#fff" />
             </TouchableOpacity>
@@ -396,20 +392,19 @@ export default function MealReviewScreen() {
         ))}
 
         {/* Botón "Add food" (estilo distinto; por ahora sin acción) */}
-        <TouchableOpacity activeOpacity={0.8} style={styles.addFoodCard} onPress={() => { /* TODO: futura implementación */ }}>
+        <TouchableOpacity activeOpacity={0.8} style={styles.addFoodCard} onPress={() => { /* TODO */ }}>
           <MaterialCommunityIcons name="plus-circle" size={18} color="#22c55e" />
           <Text style={styles.addFoodText}>Add food</Text>
         </TouchableOpacity>
       </View>
 
-      {/* NumberPad real (incluye su propio Modal). Usamos solo "weight" como gramos */}
-      <NumberPad
-        visible={numberPadVisible}
-        onClose={onNumberPadClose}
-        onConfirm={onNumberPadConfirm}
-        initialWeight={editingIdx !== null ? (edited[editingIdx]?.weight_g ?? 0) : 0}
-        initialReps={1}
-        exerciseName={editingIdx !== null ? (edited[editingIdx]?.name ?? 'Food') : 'Food'}
+      {/* WeightPad en gramos */}
+      <WeightPad
+        visible={weightPadVisible}
+        onClose={onWeightPadClose}
+        onConfirm={onWeightPadConfirm}
+        initialGrams={editingIdx !== null ? (edited[editingIdx]?.weight_g ?? 0) : 0}
+        foodName={editingIdx !== null ? (edited[editingIdx]?.name ?? 'Food') : 'Food'}
       />
 
       {/* Botones: Fix y Save */}
@@ -521,16 +516,16 @@ const styles = StyleSheet.create({
   foodCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: '#141518',
     borderRadius: 14,
     padding: 12,
     marginTop: 10,
   },
-  foodName: { color: '#fff', fontWeight: '700', fontSize: 18 },
+  foodName: { color: '#fff', fontWeight: '700', fontSize: 14 },
   foodRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  foodSub: { color: '#fff', fontSize: 14, marginLeft: 6 },
+  foodSub: { color: TEXT_MID, fontSize: 12, marginLeft: 6 },
 
-  pencilBtn: { marginLeft: 12, backgroundColor: CARD_BG, padding: 10, borderRadius: 18,  },
+  pencilBtn: { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.12)', padding: 10, borderRadius: 12 },
 
   // Botón "Add food" con bordes verdes a rayas
   addFoodCard: {
