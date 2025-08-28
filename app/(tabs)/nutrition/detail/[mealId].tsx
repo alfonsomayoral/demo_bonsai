@@ -53,7 +53,12 @@ function formatDateTime(iso: string) {
   }
 }
 
-/** Ring segmentado por macros (protein / carbs / fat) */
+/**
+ * Ring segmentado por macros SIN huecos:
+ * - Periodo del patrón = C (circunferencia) usando [len, C - len].
+ * - Offsets normalizados a [0, C) para evitar “wraps” raros en iOS.
+ * - El último segmento es el resto exacto + epsilon para tapar cualquier redondeo.
+ */
 function SegmentedRing({
   size,
   stroke,
@@ -72,29 +77,42 @@ function SegmentedRing({
   colors?: { protein: string; carbs: string; fat: string };
 }) {
   const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const total = Math.max(0, protein) + Math.max(0, carbs) + Math.max(0, fat);
+  const C = 2 * Math.PI * r;
 
-  const pPct = total > 0 ? Math.max(0, protein) / total : 0;
-  const cPct = total > 0 ? Math.max(0, carbs) / total : 0;
-  const fPct = total > 0 ? Math.max(0, fat) / total : 0;
+  const pRaw = Math.max(0, protein);
+  const cRaw = Math.max(0, carbs);
+  const fRaw = Math.max(0, fat);
+  const total = pRaw + cRaw + fRaw;
 
-  // longitudes (strokeDasharray) de cada segmento
-  const pLen = pPct * c;
-  const cLen = cPct * c;
-  const fLen = fPct * c;
+  // Porcentajes (si total=0, todo 0)
+  const pPct = total > 0 ? pRaw / total : 0;
+  const cPct = total > 0 ? cRaw / total : 0;
+  // El último segmento como resto exacto para cerrar el círculo
+  let fPct = 1 - pPct - cPct;
+  if (fPct < 0) fPct = 0;
 
-  // offsets para encadenar segmentos en el sentido horario empezando arriba (-90º)
-  const startOffset = c * 0.25; // convierte el 0 en la parte superior (por defecto empieza a la derecha)
-  const pOff = startOffset;
-  const cOff = startOffset + pLen;
-  const fOff = startOffset + pLen + cLen;
+  // Longitudes
+  const pLen = pPct * C;
+  const cLen = cPct * C;
+  // Sumar epsilon al último para cubrir antialias/rounding (no pasa nada si solapa levemente)
+  const EPS = 0.75; // px a lo largo de la circunferencia
+  const fLen = Math.min(C, Math.max(0, C - (pLen + cLen)) + EPS);
+
+  // Normalizador de offset a [0, C)
+  const norm = (v: number) => {
+    const m = v % C;
+    return m < 0 ? m + C : m;
+    };
+
+  // Empezar en la parte superior (12:00)
+  const start = C * 0.25;
 
   return (
     <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
       {/* track */}
       <Circle cx={size / 2} cy={size / 2} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
-      {/* protein */}
+
+      {/* Protein */}
       {pLen > 0 && (
         <Circle
           cx={size / 2}
@@ -102,13 +120,13 @@ function SegmentedRing({
           r={r}
           stroke={colors.protein}
           strokeWidth={stroke}
-          strokeDasharray={`${pLen},${c - pLen}`}
-          strokeDashoffset={pOff}
+          strokeDasharray={[pLen, Math.max(0, C - pLen)]} // periodo = C
+          strokeDashoffset={norm(start)}
           strokeLinecap="butt"
           fill="none"
         />
       )}
-      {/* carbs */}
+      {/* Carbs */}
       {cLen > 0 && (
         <Circle
           cx={size / 2}
@@ -116,13 +134,13 @@ function SegmentedRing({
           r={r}
           stroke={colors.carbs}
           strokeWidth={stroke}
-          strokeDasharray={`${cLen},${c - cLen}`}
-          strokeDashoffset={cOff}
+          strokeDasharray={[cLen, Math.max(0, C - cLen)]}
+          strokeDashoffset={norm(start + pLen)}
           strokeLinecap="butt"
           fill="none"
         />
       )}
-      {/* fat */}
+      {/* Fat (resto exacto + EPS) */}
       {fLen > 0 && (
         <Circle
           cx={size / 2}
@@ -130,8 +148,8 @@ function SegmentedRing({
           r={r}
           stroke={colors.fat}
           strokeWidth={stroke}
-          strokeDasharray={`${fLen},${c - fLen}`}
-          strokeDashoffset={fOff}
+          strokeDasharray={[fLen, Math.max(0, C - fLen)]}
+          strokeDashoffset={norm(start + pLen + cLen)}
           strokeLinecap="butt"
           fill="none"
         />
@@ -140,16 +158,8 @@ function SegmentedRing({
   );
 }
 
-/** Mini ring para cada alimento */
-function MiniSegmentedRing({
-  protein,
-  carbs,
-  fat,
-}: {
-  protein: number;
-  carbs: number;
-  fat: number;
-}) {
+/** Mini ring para cada alimento (usa el mismo algoritmo sin huecos) */
+function MiniSegmentedRing({ protein, carbs, fat }: { protein: number; carbs: number; fat: number }) {
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
       <SegmentedRing size={56} stroke={8} protein={protein} carbs={carbs} fat={fat} />
@@ -157,7 +167,7 @@ function MiniSegmentedRing({
   );
 }
 
-/** Tarjeta de macro/energía con estilo similar a review (draft) */
+/** Tarjeta macro con estilo consistente con draftId */
 function MacroCard({
   icon,
   label,
@@ -182,6 +192,33 @@ function MacroCard({
       <Text style={styles.macroLabel}>
         {label} {unit}
       </Text>
+    </View>
+  );
+}
+
+/** Card de score reutilizable */
+function ScoreCard({
+  icon,
+  label,
+  score10,
+  color,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  score10: number;
+  color: string;
+}) {
+  return (
+    <View style={[styles.scoreCard, { borderWidth: 2, borderColor: color }]}>
+      <View style={styles.scoreHeader}>
+        <MaterialCommunityIcons name={icon} size={18} color="#fff" />
+        <Text style={styles.scoreTitle}>
+          {label}: {score10}/10
+        </Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${(score10 / 10) * 100}%`, backgroundColor: color }]} />
+      </View>
     </View>
   );
 }
@@ -215,7 +252,7 @@ export default function MealDetailScreen() {
     if (mealId) load();
   }, [mealId]);
 
-  // Resolver banner firmado (sin imágenes de relleno)
+  // Resolver banner firmado (si existe imagen en algún item)
   useEffect(() => {
     let live = true;
     (async () => {
@@ -224,7 +261,7 @@ export default function MealDetailScreen() {
         setBanner(null);
         return;
       }
-      const url = await signedImageUrl(path, 1000);
+      const url = await signedImageUrl(path, 1200);
       if (live) setBanner(url ?? null);
     })();
     return () => {
@@ -232,13 +269,35 @@ export default function MealDetailScreen() {
     };
   }, [meal?.meal_items]);
 
-  // Título de la comida (primer ítem + “+n more”)
+  // Título de la comida
   const title = useMemo(() => {
     const items = meal?.meal_items ?? [];
     if (items.length === 0) return 'Meal';
     if (items.length === 1) return items[0].name;
     return `${items[0].name} + ${items.length - 1} more`;
   }, [meal?.meal_items]);
+
+  // Scores (confianza y health simples)
+  const confidence10 = useMemo(() => {
+    const arr = (meal?.meal_items ?? []).map((i) =>
+      typeof i.confidence === 'number' ? Math.max(0, Math.min(1, i.confidence)) : 0.8
+    );
+    if (!arr.length) return 7;
+    return Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10);
+  }, [meal?.meal_items]);
+
+  const health10 = useMemo(() => {
+    const p = meal?.total_protein ?? 0;
+    const c = meal?.total_carbs ?? 0;
+    const f = meal?.total_fat ?? 0;
+    const sum = p + c + f;
+    if (sum <= 0) return 5;
+    const pp = p / sum;
+    const cp = c / sum;
+    const fp = f / sum;
+    const score = pp * 10 * 0.6 + (1 - Math.min(fp, 0.5)) * 10 * 0.25 + (1 - Math.min(cp, 0.7)) * 10 * 0.15;
+    return Math.max(0, Math.min(10, Math.round(score)));
+  }, [meal?.total_protein, meal?.total_carbs, meal?.total_fat]);
 
   if (loading) {
     return (
@@ -259,15 +318,7 @@ export default function MealDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
-        {/* Header superior: título izquierda, fecha+hora derecha */}
-        <View style={styles.topHeader}>
-          <Text style={styles.topTitle} numberOfLines={2}>
-            {title}
-          </Text>
-          <Text style={styles.topDate}>{formatDateTime(meal.logged_at)}</Text>
-        </View>
-
-        {/* Banner de imagen (centrada, tap -> fullscreen) */}
+        {/* Banner arriba */}
         <View style={styles.bannerWrap}>
           {banner ? (
             <TouchableOpacity activeOpacity={0.9} onPress={() => setShowFull(true)}>
@@ -295,42 +346,32 @@ export default function MealDetailScreen() {
           </TouchableWithoutFeedback>
         </Modal>
 
-        {/* Fila: ring (2/3) + 4 macro cards (1/3) */}
+        {/* Título izquierda – fecha derecha */}
+        <View style={styles.topHeader}>
+          <Text style={styles.topTitle} numberOfLines={2}>
+            {title}
+          </Text>
+          <Text style={styles.topDate}>{formatDateTime(meal.logged_at)}</Text>
+        </View>
+
+        {/* Ring + macros */}
         <View style={styles.summaryRow}>
-          {/* 2/3 — ring segmentado */}
           <View style={{ flex: 2, alignItems: 'center', justifyContent: 'center' }}>
             <View style={styles.bigRingWrap}>
               <SegmentedRing
-                size={220}
+                size={240}
                 stroke={16}
                 protein={meal.total_protein}
                 carbs={meal.total_carbs}
                 fat={meal.total_fat}
               />
               <View style={styles.bigRingCenter}>
-                <MaterialCommunityIcons name="fire-circle" size={28} color="#22c55e" />
-                <Text style={styles.kcalText}>{meal.total_kcal} kcal</Text>
-              </View>
-            </View>
-
-            {/* Leyenda de colores */}
-            <View style={styles.legendRow}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                <Text style={styles.legendText}>Protein</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#eab308' }]} />
-                <Text style={styles.legendText}>Carbs</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#f97316' }]} />
-                <Text style={styles.legendText}>Fats</Text>
+                <MaterialCommunityIcons name="google-analytics" size={36} color="#ffffff" />
+                <Text style={styles.centerNote}>Macro-Analysis</Text>
               </View>
             </View>
           </View>
 
-          {/* 1/3 — columna con 4 cards */}
           <View style={styles.macroCol}>
             <MacroCard icon="fire" label="Calories" value={meal.total_kcal} unit="(kcal)" iconColor="#22c55e" borderColor="#22c55e" />
             <MacroCard icon="food-drumstick" label="Protein" value={meal.total_protein} unit="(g)" iconColor="#ef4444" borderColor="#ef4444" />
@@ -339,6 +380,10 @@ export default function MealDetailScreen() {
           </View>
         </View>
 
+        {/* Scores */}
+        <ScoreCard icon="heart-circle" label="Health Score" score10={health10} color="#FF4D8D" />
+        <ScoreCard icon="star-circle" label="Confidence Level" score10={confidence10} color="#68b6ef" />
+
         {/* Items */}
         <Text style={styles.section}>Items</Text>
         {(meal.meal_items ?? []).map((it) => (
@@ -346,7 +391,6 @@ export default function MealDetailScreen() {
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={styles.itemTitle}>{it.name}</Text>
 
-              {/* fila: peso + kcal */}
               <View style={styles.foodRow}>
                 <MaterialCommunityIcons name="weight" size={16} color="#68b6ef" />
                 <Text style={styles.foodSub}>{it.weight_g} g</Text>
@@ -355,7 +399,6 @@ export default function MealDetailScreen() {
                 <Text style={styles.foodSub}>{it.kcal} kcal</Text>
               </View>
 
-              {/* fila: macros */}
               <View style={[styles.foodRow, { marginTop: 6 }]}>
                 <MaterialCommunityIcons name="food-drumstick" size={16} color="#ef4444" />
                 <Text style={styles.foodSub}>{it.protein} g</Text>
@@ -367,12 +410,9 @@ export default function MealDetailScreen() {
                 <Text style={styles.foodSub}>{it.fat} g</Text>
               </View>
 
-              {typeof it.confidence === 'number' && (
-                <Text style={styles.itemConf}>conf: {Math.round((it.confidence ?? 0) * 100)}%</Text>
-              )}
+              {typeof it.confidence === 'number' && <Text style={styles.itemConf}>conf: {Math.round((it.confidence ?? 0) * 100)}%</Text>}
             </View>
 
-            {/* mini ring por alimento */}
             <MiniSegmentedRing protein={it.protein} carbs={it.carbs} fat={it.fat} />
           </View>
         ))}
@@ -385,23 +425,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   center: { alignItems: 'center', justifyContent: 'center' },
 
-  /* header superior */
-  topHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  topTitle: { color: '#fff', fontSize: 20, fontWeight: '700', flex: 1, paddingRight: 12 },
-  topDate: { color: TEXT_MID, fontSize: 13 },
-
-  /* banner */
   bannerWrap: { width: '100%', overflow: 'hidden', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
-  banner: { width: '100%', height: 260, resizeMode: 'cover' },
+  banner: { width: '100%', height: 260, resizeMode: 'cover', backgroundColor: '#000' },
 
-  /* modal fullscreen image */
   fullOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.92)',
@@ -419,21 +445,21 @@ const styles = StyleSheet.create({
     padding: 8,
   },
 
-  /* resumen fila */
-  summaryRow: { flexDirection: 'row', paddingHorizontal: 12, marginTop: 16 },
-  bigRingWrap: {
-    width: 240,
-    height: 240,
-    alignItems: 'center',
-    justifyContent: 'center',
+  topHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
-  bigRingCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  kcalText: { color: '#fff', fontSize: 18, fontWeight: '800', marginTop: 6 },
+  topTitle: { color: '#fff', fontSize: 20, fontWeight: '700', flex: 1, paddingRight: 12 },
+  topDate: { color: TEXT_MID, fontSize: 13 },
 
-  legendRow: { flexDirection: 'row', marginTop: 10, gap: 16 },
-  legendItem: { flexDirection: 'row', alignItems: 'center' },
-  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
-  legendText: { color: TEXT_MID, fontSize: 12 },
+  summaryRow: { flexDirection: 'row', paddingHorizontal: 12, marginTop: 8 },
+  bigRingWrap: { width: 260, height: 260, alignItems: 'center', justifyContent: 'center' },
+  bigRingCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  centerNote: { color: '#fff', marginTop: 6, fontWeight: '700' },
 
   macroCol: { flex: 1, marginLeft: 8, justifyContent: 'space-between' },
   macroCard: {
@@ -452,7 +478,18 @@ const styles = StyleSheet.create({
   macroValue: { color: '#fff', fontSize: 20, fontWeight: '800', marginTop: 2 },
   macroLabel: { color: '#FFF', marginTop: 2, fontSize: 13 },
 
-  /* sección items */
+  scoreCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 18,
+    padding: 14,
+    marginHorizontal: 12,
+    marginTop: 14,
+  },
+  scoreHeader: { flexDirection: 'row', alignItems: 'center' },
+  scoreTitle: { color: '#fff', fontSize: 14, fontWeight: '600', marginLeft: 8 },
+  progressTrack: { height: 8, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.12)', marginTop: 10, overflow: 'hidden' },
+  progressFill: { height: 8, borderRadius: 6 },
+
   section: { color: '#fff', fontSize: 18, fontWeight: '600', paddingHorizontal: 16, marginTop: 18, marginBottom: 8 },
 
   itemCard: {
