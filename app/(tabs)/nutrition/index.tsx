@@ -220,7 +220,7 @@ export default function NutritionHome() {
             <Text style={styles.kcalBig}>{Math.round(consumed.calories)}/{TARGETS.calories} kcal</Text>
           </View>
 
-          <View style={styles.kcalRing}>
+        <View style={styles.kcalRing}>
             <ProgressRing size={110} stroke={12} progress={kcalProgress} color="#10B981" trackColor="#1F2937">
               <MaterialCommunityIcons name="fire-circle" size={30} color="#10B981" />
             </ProgressRing>
@@ -261,13 +261,13 @@ export default function NutritionHome() {
           <MealCard
             key={m.id}
             mealId={m.id}
-            image={m.image}
             title={m.title}
+            time={m.time}
             kcal={m.kcal}
             protein={m.protein}
             carbs={m.carbs}
             fat={m.fat}
-            time={m.time} // ahora incluye fecha + hora
+            imagePath={m.image}  // ✅ usar imagePath, no "image"
           />
         ))}
 
