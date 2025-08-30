@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { supabase, signedImageUrl } from '@/lib/supabase';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 type MealItem = {
   id: string;
@@ -42,6 +42,7 @@ type Meal = {
 const CARD_BG = '#191B1F';
 const TEXT_MID = '#9CA3AF';
 
+/* Utilidades fecha */
 function formatDateTime(iso: string) {
   try {
     const d = new Date(iso);
@@ -53,12 +54,25 @@ function formatDateTime(iso: string) {
   }
 }
 
-/**
- * Ring segmentado por macros SIN huecos:
- * - Periodo del patrón = C (circunferencia) usando [len, C - len].
- * - Offsets normalizados a [0, C) para evitar “wraps” raros en iOS.
- * - El último segmento es el resto exacto + epsilon para tapar cualquier redondeo.
- */
+/* ───────────── Ring segmentado con ARC (sin huecos) ───────────── */
+
+function degToRad(deg: number) {
+  return (deg * Math.PI) / 180;
+}
+function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
+  const a = degToRad(angleDeg);
+  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+}
+function arcPath(cx: number, cy: number, r: number, startDeg: number, sweepDeg: number) {
+  if (sweepDeg <= 0) return '';
+  const endDeg = startDeg + sweepDeg;
+  const start = polarToCartesian(cx, cy, r, startDeg);
+  const end = polarToCartesian(cx, cy, r, endDeg);
+  const largeArcFlag = sweepDeg > 180 ? 1 : 0;
+  // draw clockwise (sweep-flag=1)
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
+}
+
 function SegmentedRing({
   size,
   stroke,
@@ -77,88 +91,59 @@ function SegmentedRing({
   colors?: { protein: string; carbs: string; fat: string };
 }) {
   const r = (size - stroke) / 2;
-  const C = 2 * Math.PI * r;
+  const cx = size / 2;
+  const cy = size / 2;
 
   const pRaw = Math.max(0, protein);
   const cRaw = Math.max(0, carbs);
   const fRaw = Math.max(0, fat);
   const total = pRaw + cRaw + fRaw;
 
-  // Porcentajes (si total=0, todo 0)
+  // Evitar divisiones por 0
   const pPct = total > 0 ? pRaw / total : 0;
   const cPct = total > 0 ? cRaw / total : 0;
-  // El último segmento como resto exacto para cerrar el círculo
   let fPct = 1 - pPct - cPct;
   if (fPct < 0) fPct = 0;
 
-  // Longitudes
-  const pLen = pPct * C;
-  const cLen = cPct * C;
-  // Sumar epsilon al último para cubrir antialias/rounding (no pasa nada si solapa levemente)
-  const EPS = 0.75; // px a lo largo de la circunferencia
-  const fLen = Math.min(C, Math.max(0, C - (pLen + cLen)) + EPS);
+  // Angulos exactos que suman 360
+  const pDeg = 360 * pPct;
+  const cDeg = 360 * cPct;
+  let fDeg = 360 - (pDeg + cDeg);
+  if (fDeg < 0) fDeg = 0;
 
-  // Normalizador de offset a [0, C)
-  const norm = (v: number) => {
-    const m = v % C;
-    return m < 0 ? m + C : m;
-    };
+  // Pequeño solapamiento para evitar artefactos (antialias) entre segmentos
+  const OVERLAP = 0.4; // grados
 
-  // Empezar en la parte superior (12:00)
-  const start = C * 0.25;
+  // Empezar arriba (12:00) = -90°
+  let cursor = -90;
+
+  const pPath = arcPath(cx, cy, r, cursor, pDeg + OVERLAP);
+  cursor += pDeg; // el solapado se "come" sobre el siguiente
+  const cPath = arcPath(cx, cy, r, cursor - OVERLAP, cDeg + OVERLAP);
+  cursor += cDeg;
+  const fPath = arcPath(cx, cy, r, cursor - OVERLAP, fDeg + OVERLAP);
 
   return (
-    <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-      {/* track */}
-      <Circle cx={size / 2} cy={size / 2} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
+    <Svg width={size} height={size}>
+      {/* Track */}
+      <Circle cx={cx} cy={cy} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
 
       {/* Protein */}
-      {pLen > 0 && (
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke={colors.protein}
-          strokeWidth={stroke}
-          strokeDasharray={[pLen, Math.max(0, C - pLen)]} // periodo = C
-          strokeDashoffset={norm(start)}
-          strokeLinecap="butt"
-          fill="none"
-        />
+      {pDeg > 0 && (
+        <Path d={pPath} stroke={colors.protein} strokeWidth={stroke} strokeLinecap="butt" fill="none" />
       )}
+
       {/* Carbs */}
-      {cLen > 0 && (
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke={colors.carbs}
-          strokeWidth={stroke}
-          strokeDasharray={[cLen, Math.max(0, C - cLen)]}
-          strokeDashoffset={norm(start + pLen)}
-          strokeLinecap="butt"
-          fill="none"
-        />
+      {cDeg > 0 && (
+        <Path d={cPath} stroke={colors.carbs} strokeWidth={stroke} strokeLinecap="butt" fill="none" />
       )}
-      {/* Fat (resto exacto + EPS) */}
-      {fLen > 0 && (
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke={colors.fat}
-          strokeWidth={stroke}
-          strokeDasharray={[fLen, Math.max(0, C - fLen)]}
-          strokeDashoffset={norm(start + pLen + cLen)}
-          strokeLinecap="butt"
-          fill="none"
-        />
-      )}
+
+      {/* Fat */}
+      {fDeg > 0 && <Path d={fPath} stroke={colors.fat} strokeWidth={stroke} strokeLinecap="butt" fill="none" />}
     </Svg>
   );
 }
 
-/** Mini ring para cada alimento (usa el mismo algoritmo sin huecos) */
 function MiniSegmentedRing({ protein, carbs, fat }: { protein: number; carbs: number; fat: number }) {
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -167,7 +152,8 @@ function MiniSegmentedRing({ protein, carbs, fat }: { protein: number; carbs: nu
   );
 }
 
-/** Tarjeta macro con estilo consistente con draftId */
+/* ───────────── UI helpers ───────────── */
+
 function MacroCard({
   icon,
   label,
@@ -196,7 +182,6 @@ function MacroCard({
   );
 }
 
-/** Card de score reutilizable */
 function ScoreCard({
   icon,
   label,
@@ -223,6 +208,8 @@ function ScoreCard({
   );
 }
 
+/* ───────────── Pantalla ───────────── */
+
 export default function MealDetailScreen() {
   const { mealId } = useLocalSearchParams<{ mealId: string }>();
 
@@ -231,7 +218,6 @@ export default function MealDetailScreen() {
   const [banner, setBanner] = useState<string | null>(null);
   const [showFull, setShowFull] = useState(false);
 
-  // Cargar datos del meal
   useEffect(() => {
     const load = async () => {
       try {
@@ -252,7 +238,6 @@ export default function MealDetailScreen() {
     if (mealId) load();
   }, [mealId]);
 
-  // Resolver banner firmado (si existe imagen en algún item)
   useEffect(() => {
     let live = true;
     (async () => {
@@ -269,7 +254,6 @@ export default function MealDetailScreen() {
     };
   }, [meal?.meal_items]);
 
-  // Título de la comida
   const title = useMemo(() => {
     const items = meal?.meal_items ?? [];
     if (items.length === 0) return 'Meal';
@@ -277,7 +261,6 @@ export default function MealDetailScreen() {
     return `${items[0].name} + ${items.length - 1} more`;
   }, [meal?.meal_items]);
 
-  // Scores (confianza y health simples)
   const confidence10 = useMemo(() => {
     const arr = (meal?.meal_items ?? []).map((i) =>
       typeof i.confidence === 'number' ? Math.max(0, Math.min(1, i.confidence)) : 0.8
@@ -420,6 +403,8 @@ export default function MealDetailScreen() {
     </SafeAreaView>
   );
 }
+
+/* ───────────── estilos ───────────── */
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
