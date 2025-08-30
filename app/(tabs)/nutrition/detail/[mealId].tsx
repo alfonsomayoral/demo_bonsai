@@ -343,7 +343,7 @@ export default function MealDetailScreen() {
             <View style={styles.bigRingWrap}>
               <SegmentedRing
                 size={240}
-                stroke={16}
+                stroke={24}
                 protein={meal.total_protein}
                 carbs={meal.total_carbs}
                 fat={meal.total_fat}
