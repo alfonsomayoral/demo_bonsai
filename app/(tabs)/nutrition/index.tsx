@@ -1,6 +1,15 @@
 // app/(tabs)/nutrition/index.tsx
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Dimensions,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  LayoutChangeEvent,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,6 +20,9 @@ import { FloatingCameraButton } from '@/components/nutrition/FloatingCameraButto
 import { WaterCard } from '@/components/nutrition/WaterCard';
 import { useNutritionStore } from '@/store/nutritionStore';
 import { supabase } from '@/lib/supabase';
+import ConcentricMacroRings from '@/components/nutrition/ConcentricMacroRings';
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 /* --------------------- objetivos por defecto ---------------------- */
 const TARGETS = {
@@ -47,15 +59,6 @@ const yesterdayYmd = () => {
   return d.toISOString().slice(0, 10);
 };
 
-/* Construye la URL pública del objeto en el bucket meal-images */
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL as string | undefined;
-const publicMealImageUrl = (path?: string | null) => {
-  if (!path || !SUPABASE_URL) return null;
-  const base = SUPABASE_URL.replace(/\/+$/, '');
-  // Nota: el path de Storage no empieza con '/', así que lo concatenamos tal cual
-  return `${base}/storage/v1/object/public/meal-images/${path}`;
-};
-
 /* ------------------------- componente macro ------------------------ */
 function MacroRing({
   label,
@@ -86,34 +89,181 @@ function MacroRing({
   );
 }
 
+/* ---------------------- contenedor deslizante ---------------------- */
+function StatsPager({
+  consumed,
+}: {
+  consumed: { calories: number; protein: number; carbs: number; fat: number };
+}) {
+  const scrollRef = useRef<ScrollView>(null);
+  const [page, setPage] = useState(0);
+
+  // Ancho REAL del viewport del pager (afectado por el padding del ScrollView vertical)
+  const [viewportW, setViewportW] = useState<number>(SCREEN_W);
+  const handleLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0 && w !== viewportW) setViewportW(w);
+  };
+
+  const kcalProgress = clamp01(consumed.calories / TARGETS.calories);
+
+  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const p = Math.round(e.nativeEvent.contentOffset.x / Math.max(1, viewportW));
+    setPage(p);
+  };
+
+  return (
+    <View style={styles.pagerContainer}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onLayout={handleLayout}
+        onMomentumScrollEnd={onScrollEnd}
+        // El width del content = viewportW * número de páginas
+        contentContainerStyle={{ width: viewportW * 2 }}
+        // Que el frame del pager ocupe el ancho disponible (ya sin "peeks")
+        style={styles.pagerScroll}
+      >
+        {/* Página 1 (ancho = viewport) */}
+        <View style={[styles.pagerPage, { width: viewportW }]}>
+          {/* Contenido centrado y del MISMO ancho en ambas páginas */}
+          <View style={[styles.pageContent, { width: viewportW }]}>
+            {/* Card: Calories (fondo #191B1F) */}
+            <View style={styles.cardSurface}>
+              <Text style={styles.kcalTitle}>Calories Target</Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.kcalBig}>
+                    {Math.round(consumed.calories)}/{TARGETS.calories} kcal
+                  </Text>
+                </View>
+                <View style={styles.kcalRing}>
+                  <ProgressRing
+                    size={110}
+                    stroke={12}
+                    progress={kcalProgress}
+                    color="#10B981"
+                    trackColor="#1F2937"
+                  >
+                    <MaterialCommunityIcons name="fire-circle" size={30} color="#10B981" />
+                  </ProgressRing>
+                </View>
+              </View>
+            </View>
+
+            {/* Tres cards de macros (todos fondo #191B1F) */}
+            <View style={styles.macroRow}>
+              <MacroRing
+                label="Protein"
+                iconName="food-drumstick"
+                value={consumed.protein}
+                target={TARGETS.protein}
+                color="#FF6B6B"
+              />
+              <MacroRing
+                label="Carbs"
+                iconName="rice"
+                value={consumed.carbs}
+                target={TARGETS.carbs}
+                color="#FFD93D"
+              />
+              <MacroRing
+                label="Fats"
+                iconName="cheese"
+                value={consumed.fat}
+                target={TARGETS.fat}
+                color="#FF8E53"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Página 2 (ancho = viewport) */}
+        <View style={[styles.pagerPage, { width: viewportW }]}>
+          <View style={[styles.pageContent, { width: viewportW }]}>
+            <View style={styles.cardSurface}>
+              <Text style={styles.kcalTitle}>Progress Rings</Text>
+
+              <ConcentricMacroRings
+                calories={consumed.calories}
+                caloriesTarget={TARGETS.calories}
+                protein={consumed.protein}
+                proteinTarget={TARGETS.protein}
+                carbs={consumed.carbs}
+                carbsTarget={TARGETS.carbs}
+                fat={consumed.fat}
+                fatTarget={TARGETS.fat}
+              />
+
+              {/* Leyenda */}
+              <View style={styles.legendRow}>
+                <View style={styles.legendItem}>
+                  <MaterialCommunityIcons name="food-drumstick" size={16} color="#FF6B6B" />
+                  <Text style={styles.legendText}>Protein: {Math.round(consumed.protein)} g</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <MaterialCommunityIcons name="rice" size={16} color="#FFD93D" />
+                  <Text style={styles.legendText}>Carbs: {Math.round(consumed.carbs)} g</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <MaterialCommunityIcons name="cheese" size={16} color="#FF8E53" />
+                  <Text style={styles.legendText}>Fats: {Math.round(consumed.fat)} g</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <MaterialCommunityIcons name="fire" size={16} color="#10B981" />
+                  <Text style={styles.legendText}>
+                    Calories: {Math.round(consumed.calories)} kcal
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* indicador de página (2 bullets) */}
+      <View style={styles.pagerDots}>
+        <View style={[styles.dot, page === 0 ? styles.dotActive : styles.dotInactive]} />
+        <View style={[styles.dot, page === 1 ? styles.dotActive : styles.dotInactive]} />
+      </View>
+    </View>
+  );
+}
+
 /* --------------------------- pantalla home -------------------------- */
 export default function NutritionHome() {
-  // Selectores separados para Zustand v5 (evita snapshots cambiantes)
-  const meals         = useNutritionStore((s: any) => s.todayMeals || []);
-  const totals        = useNutritionStore((s: any) => s.todayTotals || { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const meals = useNutritionStore((s: any) => s.todayMeals || []);
+  const totals = useNutritionStore(
+    (s: any) => s.todayTotals || { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
   const loadTodayData = useNutritionStore((s: any) => s.loadTodayData);
 
   const [streak, setStreak] = useState<number>(0);
-  const [recentMeals, setRecentMeals] = useState<any[]>([]); // ⬅️ últimas 3 comidas (cualquier día)
+  const [recentMeals, setRecentMeals] = useState<any[]>([]);
 
-  // Carga datos del día al montar
   useEffect(() => {
     if (typeof loadTodayData === 'function') loadTodayData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cargar SIEMPRE las 3 últimas comidas del usuario (se refresca cuando cambian las comidas del día)
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user) {
           setRecentMeals([]);
           return;
         }
         const { data, error } = await supabase
           .from('meals')
-          .select('id, logged_at, total_kcal, total_protein, total_carbs, total_fat, meal_items(name, image_path)')
+          .select(
+            'id, logged_at, total_kcal, total_protein, total_carbs, total_fat, meal_items(name, image_path)'
+          )
           .eq('user_id', user.id)
           .order('logged_at', { ascending: false })
           .limit(3);
@@ -129,7 +279,6 @@ export default function NutritionHome() {
     })();
   }, [meals]);
 
-  // Racha basada en si hay comidas hoy
   useEffect(() => {
     (async () => {
       try {
@@ -138,7 +287,7 @@ export default function NutritionHome() {
         const parsed: { count: number; lastDate: string } | null = raw ? JSON.parse(raw) : null;
 
         const today = todayYmd();
-        const yest  = yesterdayYmd();
+        const yest = yesterdayYmd();
         const hasMealsToday = (meals?.length ?? 0) > 0;
 
         if (hasMealsToday) {
@@ -167,38 +316,34 @@ export default function NutritionHome() {
           }
         }
       } catch {
-        // si falla storage, no rompemos la UI
+        // ignore
       }
     })();
   }, [meals]);
 
-  /* consumido y progreso (para los anillos objetivo del día) */
   const consumed = useMemo(
     () => ({
       calories: totals?.calories ?? 0,
-      protein : totals?.protein  ?? 0,
-      carbs   : totals?.carbs    ?? 0,
-      fat     : totals?.fat      ?? 0,
+      protein: totals?.protein ?? 0,
+      carbs: totals?.carbs ?? 0,
+      fat: totals?.fat ?? 0,
     }),
     [totals]
   );
 
-  const kcalProgress = clamp01(consumed.calories / TARGETS.calories);
-
-  /* lista mostrable: SIEMPRE las 3 últimas comidas registradas (sin demos) */
+  // Preparación “Recently uploaded”
   const listMeals = recentMeals.map((m: any) => {
     const imagePath = m.meal_items?.find((it: any) => !!it.image_path)?.image_path ?? null;
-    const imageUrl  = publicMealImageUrl(imagePath) ??
-      'https://images.unsplash.com/photo-1546069901-eacef0df6022?auto=format&fit=crop&w=1200&q=60';
     return {
       id: m.id,
-      image: imageUrl,
-      title: m.meal_items?.[0]?.name ?? 'Logged meal',
+      imagePath,
+      title:
+        (m.meal_items?.[0]?.name ?? 'Logged meal') +
+        (m.meal_items && m.meal_items.length > 1 ? ` + ${m.meal_items.length - 1} more` : ''),
       kcal: m.total_kcal ?? 0,
       protein: m.total_protein ?? 0,
       carbs: m.total_carbs ?? 0,
       fat: m.total_fat ?? 0,
-      // ⬇️ ahora fecha + hora (antes solo hora)
       time: formatDateTime(m.logged_at),
     };
   });
@@ -206,56 +351,19 @@ export default function NutritionHome() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Streak pill (dentro del área segura) */}
+        {/* Streak pill */}
         <View style={styles.streakPill}>
           <Text style={styles.streakEmoji}>🔥</Text>
           <Text style={styles.streakText}>{streak}</Text>
         </View>
 
-        {/* --------- Card principal con anillo de calorías --------- */}
-        <View style={styles.kcalCard}>
-          <Text style={styles.kcalTitle}>Calories Target</Text>
-          
-          <View style={{ flex: 1 }}>
-            <Text style={styles.kcalBig}>{Math.round(consumed.calories)}/{TARGETS.calories} kcal</Text>
-          </View>
+        {/* ---------- CONTENEDOR DESLIZANTE (2 páginas) ---------- */}
+        <StatsPager consumed={consumed} />
 
-        <View style={styles.kcalRing}>
-            <ProgressRing size={110} stroke={12} progress={kcalProgress} color="#10B981" trackColor="#1F2937">
-              <MaterialCommunityIcons name="fire-circle" size={30} color="#10B981" />
-            </ProgressRing>
-          </View>
-        </View>
-
-        {/* ------------------------- Macro rings ------------------------- */}
-        <View style={styles.macroRow}>
-          <MacroRing
-            label="Protein"
-            iconName="food-drumstick"
-            value={consumed.protein}
-            target={TARGETS.protein}
-            color="#FF6B6B"
-          />
-          <MacroRing
-            label="Carbs"
-            iconName="rice"
-            value={consumed.carbs}
-            target={TARGETS.carbs}
-            color="#FFD93D"
-          />
-          <MacroRing
-            label="Fats"
-            iconName="cheese"
-            value={consumed.fat}
-            target={TARGETS.fat}
-            color="#FF8E53"
-          />
-        </View>
-
-        {/* --------------------- Agua (3L máx.) --------------------- */}
+        {/* Agua */}
         <WaterCard />
 
-        {/* ---------------------- Recientes ---------------------- */}
+        {/* Recientes */}
         <Text style={styles.sectionTitle}>Recently uploaded</Text>
         {listMeals.map((m: any) => (
           <MealCard
@@ -267,14 +375,13 @@ export default function NutritionHome() {
             protein={m.protein}
             carbs={m.carbs}
             fat={m.fat}
-            imagePath={m.image}  // ✅ usar imagePath, no "image"
+            imagePath={m.imagePath ?? null}
           />
         ))}
 
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* botón flotante cámara (centro-inferior) */}
       <FloatingCameraButton />
     </SafeAreaView>
   );
@@ -285,7 +392,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0B0B0D' },
   scroll: { padding: 20, paddingBottom: 60 },
 
-  /* streak pill dentro del área segura */
+  /* streak pill */
   streakPill: {
     backgroundColor: '#191B1F',
     borderRadius: 14,
@@ -299,39 +406,56 @@ const styles = StyleSheet.create({
   streakEmoji: { fontSize: 18, marginRight: 4 },
   streakText: { color: '#fff', fontFamily: 'Inter-SemiBold', fontSize: 13 },
 
-  /* card principal kcal */
-  kcalCard: {
+  /* pager */
+  pagerContainer: {
+    marginBottom: 20,
+  },
+  pagerScroll: {
+    alignSelf: 'stretch', // ocupa el ancho disponible en el layout (viewport real)
+  },
+  pagerPage: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pageContent: {
+    // mismo ancho para ambas páginas; se asigna dinámicamente con viewportW
+  },
+  pagerDots: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignSelf: 'center',
+    gap: 6,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  dotActive: { backgroundColor: '#10B981' },
+  dotInactive: { backgroundColor: '#374151' },
+
+  /* Cards de la página 1 */
+  cardSurface: {
     backgroundColor: '#191B1F',
     borderRadius: 20,
     padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    position: 'relative',
+    marginBottom: 12,
   },
   kcalTitle: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
     color: '#10B981',
-    fontSize: 26,
+    fontSize: 20,
     fontFamily: 'Inter-SemiBold',
   },
   kcalBig: { color: '#FFFFFF', fontSize: 20, fontFamily: 'Inter-Bold' },
-
   kcalRing: { width: 110, height: 110, alignItems: 'center', justifyContent: 'center' },
 
   /* macro grid */
   macroRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginTop: 4,
   },
   macroCard: {
     flex: 1,
     backgroundColor: '#191B1F',
     borderRadius: 16,
-    paddingVertical: 13,
+    paddingVertical: 12,
     alignItems: 'center',
     marginHorizontal: 4,
   },
@@ -343,6 +467,20 @@ const styles = StyleSheet.create({
   },
   macroRingWrapper: { width: 90, height: 90, alignItems: 'center', justifyContent: 'center' },
   macroBottom: { color: '#9CA3AF', fontSize: 12, marginTop: 8 },
+
+  /* leyenda de página 2 */
+  legendRow: {
+    marginTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.07)',
+    paddingTop: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  legendText: { color: '#D1D5DB', marginLeft: 8, fontSize: 13 },
 
   sectionTitle: {
     color: '#FFFFFF',
