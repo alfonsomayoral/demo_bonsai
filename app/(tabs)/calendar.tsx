@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, Text, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 import { supabase } from '@/lib/supabase';
-import { CalendarView } from '@/components/ui/CalendarView';
+import { CalendarView, DayMarkers } from '@/components/ui/CalendarView';
 import { MealCard } from '@/components/nutrition/MealCard';
 import { ProgressRing } from '@/components/nutrition/ProgressRing';
 
@@ -47,46 +47,22 @@ type Meal = {
   meal_items?: MealItem[];
 };
 
-/* ------------------------- mini componentes ------------------------ */
-function StatRing({
-  label,
-  icon,
-  value,
-  target,
-  color,
-}: {
-  label: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  value: number;
-  target: number;
-  color: string;
-}) {
-  const progress = target > 0 ? Math.min(1, Math.max(0, value / target)) : 0;
-  return (
-    <View style={styles.statCard}>
-      <Text style={[styles.statTitle, { color }]}>{label}</Text>
-      <View style={styles.statRing}>
-        <ProgressRing size={74} stroke={8} progress={progress} color={color} trackColor="#1F2937">
-          <MaterialCommunityIcons name={icon} size={26} color={color} />
-        </ProgressRing>
-      </View>
-      <Text style={styles.statValue}>
-        {Math.round(value)} / {Math.round(target)}
-      </Text>
-    </View>
-  );
-}
-
-function SmallMetric({
-  label,
-  value,
-}: { label: string; value: string }) {
-  return (
-    <View style={styles.smallMetric}>
-      <Text style={styles.smallMetricLabel}>{label}</Text>
-      <Text style={styles.smallMetricValue}>{value}</Text>
-    </View>
-  );
+/* Clasificación de franja horaria para iconos de comida */
+type MealSlot = 'morning' | 'day' | 'night';
+function classifyMealSlot(iso: string): MealSlot {
+  const dt = new Date(iso); // se interpreta a hora local del dispositivo
+  const h = dt.getHours();
+  const m = dt.getMinutes();
+  // 05:00–11:59 => 'morning'
+  if (h > 5 && h < 12) return 'morning';
+  if (h === 5 && m >= 0) return 'morning';
+  if (h === 11 && m <= 59) return 'morning';
+  // 12:00–19:00 => 'day'
+  if (h > 12 && h < 19) return 'day';
+  if (h === 12 && m >= 0) return 'day';
+  if (h === 19 && m === 0) return 'day';
+  // 19:01–04:59 => 'night'
+  return 'night';
 }
 
 /* ------------------------------ pantalla --------------------------- */
@@ -95,8 +71,10 @@ export default function CalendarScreen() {
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [selectedDate, setSelectedDate] = useState(todayYmd());
-  const [markedDates, setMarkedDates] = useState<{ [date: string]: 'green' | 'gray' }>({});
   const [userId, setUserId] = useState<string | null>(null);
+
+  // Marcadores complejos (workout + comidas por franja) para el mes visible
+  const [dayMarkers, setDayMarkers] = useState<{ [date: string]: DayMarkers }>({});
 
   // Datos del día seleccionado
   const [loadingDay, setLoadingDay] = useState(false);
@@ -113,7 +91,7 @@ export default function CalendarScreen() {
     });
   }, []);
 
-  // Marcar días del mes (comidas / workouts)
+  // Marcar días del mes (workouts + comidas por franja)
   useEffect(() => {
     if (!userId) return;
     const { start, end, daysInMonth } = monthRangeYmd(currentYear, currentMonth);
@@ -124,14 +102,31 @@ export default function CalendarScreen() {
     ]).then(([mealsRes, workoutsRes]) => {
       const meals = mealsRes.data || [];
       const workouts = workoutsRes.data || [];
-      const map: { [d: string]: 'green' | 'gray' } = {};
+
+      // Inicializar mapa con días del mes
+      const map: { [d: string]: DayMarkers } = {};
       for (let d = 1; d <= daysInMonth; d++) {
         const date = ymdFromParts(currentYear, currentMonth, d);
-        const hasMeal = meals.some(m => (m.logged_at || '').slice(0, 10) === date);
-        const hasWorkout = workouts.some(w => (w.start_time || '').slice(0, 10) === date);
-        map[date] = hasMeal || hasWorkout ? 'green' : 'gray';
+        map[date] = { workout: false, meals: [] };
       }
-      setMarkedDates(map);
+
+      // Workouts por día
+      for (const w of workouts as any[]) {
+        const d = (w.start_time || '').slice(0, 10);
+        if (map[d]) map[d].workout = true;
+      }
+
+      // Comidas por día con franjas
+      for (const m of meals as any[]) {
+        const iso = m.logged_at as string;
+        const d = iso.slice(0, 10);
+        if (!map[d]) continue;
+        const slot = classifyMealSlot(iso);
+        const arr = map[d].meals!;
+        if (!arr.includes(slot)) arr.push(slot);
+      }
+
+      setDayMarkers(map);
     });
   }, [userId, currentMonth, currentYear]);
 
@@ -250,7 +245,7 @@ export default function CalendarScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#111827' }}>
       <ScrollView style={styles.container} contentContainerStyle={{ padding: 10, paddingBottom: 32 }}>
         <CalendarView
-          markedDates={markedDates}
+          dayMarkers={dayMarkers}
           selectedDate={selectedDate}
           onDaySelect={setSelectedDate}
           currentMonth={currentMonth}
@@ -268,10 +263,10 @@ export default function CalendarScreen() {
           <>
             {/* Rings fila */}
             <View style={styles.ringsRow}>
-              <StatRing label="Calories" icon="fire"         value={dayTotals.kcal}    target={targets.kcal}    color="#10B981" />
+              <StatRing label="Calories" icon="fire"           value={dayTotals.kcal}    target={targets.kcal}    color="#10B981" />
               <StatRing label="Protein"  icon="food-drumstick" value={dayTotals.protein} target={targets.protein} color="#ef4444" />
-              <StatRing label="Carbs"    icon="rice"          value={dayTotals.carbs}   target={targets.carbs}   color="#eab308" />
-              <StatRing label="Fats"     icon="cheese"        value={dayTotals.fat}     target={targets.fat}     color="#f97316" />
+              <StatRing label="Carbs"    icon="rice"            value={dayTotals.carbs}   target={targets.carbs}   color="#eab308" />
+              <StatRing label="Fats"     icon="cheese"          value={dayTotals.fat}     target={targets.fat}     color="#f97316" />
             </View>
 
             {/* Meals del día */}
@@ -327,6 +322,48 @@ export default function CalendarScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/* ------------------------- mini componentes ------------------------ */
+function StatRing({
+  label,
+  icon,
+  value,
+  target,
+  color,
+}: {
+  label: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  value: number;
+  target: number;
+  color: string;
+}) {
+  const progress = target > 0 ? Math.min(1, Math.max(0, value / target)) : 0;
+  return (
+    <View style={styles.statCard}>
+      <Text style={[styles.statTitle, { color }]}>{label}</Text>
+      <View style={styles.statRing}>
+        <ProgressRing size={74} stroke={8} progress={progress} color={color} trackColor="#1F2937">
+          <MaterialCommunityIcons name={icon} size={26} color={color} />
+        </ProgressRing>
+      </View>
+      <Text style={styles.statValue}>
+        {Math.round(value)} / {Math.round(target)}
+      </Text>
+    </View>
+  );
+}
+
+function SmallMetric({
+  label,
+  value,
+}: { label: string; value: string }) {
+  return (
+    <View style={styles.smallMetric}>
+      <Text style={styles.smallMetricLabel}>{label}</Text>
+      <Text style={styles.smallMetricValue}>{value}</Text>
+    </View>
   );
 }
 

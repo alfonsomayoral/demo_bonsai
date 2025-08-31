@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 const monthNames = [
   'January','February','March','April','May','June',
@@ -26,8 +27,15 @@ function getFirstDayOfWeek(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
+type MealSlot = 'morning' | 'day' | 'night';
+export type DayMarkers = {
+  workout?: boolean;
+  meals?: MealSlot[]; // cada franja sólo se marca una vez máximo
+};
+
 interface CalendarViewProps {
-  markedDates: { [date: string]: 'green' | 'gray' };
+  /** Marcadores por día: entreno y franjas de comidas */
+  dayMarkers: { [date: string]: DayMarkers };
   selectedDate: string;
   onDaySelect: (date: string) => void;
   currentMonth: number;
@@ -39,7 +47,7 @@ interface CalendarViewProps {
 type DayCell = { key: string; label: number } | null;
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
-  markedDates,
+  dayMarkers,
   selectedDate,
   onDaySelect,
   currentMonth,
@@ -103,7 +111,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           }
           const isSelected = cell.key === selectedDate;
           const isToday = cell.key === todayString;
-          const mark = markedDates[cell.key]; // 'green' | 'gray' | undefined
+          const markers = dayMarkers[cell.key]; // { workout?: boolean; meals?: MealSlot[] }
+
+          const showWorkout = !!markers?.workout;
+          const meals = markers?.meals ?? [];
+
+          // Construimos una única fila de iconos combinada: pesa + comidas
+          const hasAnyIcon = showWorkout || meals.length > 0;
 
           return (
             <TouchableOpacity
@@ -114,11 +128,50 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 isToday && styles.todayOutline,
               ]}
               onPress={() => onDaySelect(cell.key)}
+              activeOpacity={0.8}
             >
+              {/* Número del día SIEMPRE centrado vertical y horizontalmente */}
               <Text style={[styles.dayLabel, isSelected && styles.dayLabelSelected]}>
                 {cell.label}
               </Text>
-              {mark && <View style={[styles.dot, { backgroundColor: mark === 'green' ? '#10B981' : '#9CA3AF' }]} />}
+
+              {/* Fila inferior con iconos (pesa + comidas) ABSOLUTA, no desplaza el número */}
+              {hasAnyIcon && (
+                <View style={styles.iconBottomRow}>
+                  {showWorkout && (
+                    <MaterialCommunityIcons
+                      name="dumbbell"
+                      size={14}
+                      color="#10B981"
+                      style={styles.iconSpacing}
+                    />
+                  )}
+                  {meals.includes('morning') && (
+                    <MaterialCommunityIcons
+                      name="apple"
+                      size={14}
+                      color="#10B981"
+                      style={styles.iconSpacing}
+                    />
+                  )}
+                  {meals.includes('day') && (
+                    <MaterialCommunityIcons
+                      name="food-turkey"
+                      size={14}
+                      color="#10B981"
+                      style={styles.iconSpacing}
+                    />
+                  )}
+                  {meals.includes('night') && (
+                    <MaterialCommunityIcons
+                      name="food-steak"
+                      size={14}
+                      color="#10B981"
+                      style={styles.iconSpacing}
+                    />
+                  )}
+                </View>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -127,7 +180,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   );
 };
 
-const CELL_H = 34;
+const CELL_H = 56; // alto suficiente para número centrado + fila inferior de iconos
 
 const styles = StyleSheet.create({
   container: {
@@ -169,8 +222,11 @@ const styles = StyleSheet.create({
     height: CELL_H,
     borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'center', // mantiene el número centrado
     marginVertical: 3,
+    paddingVertical: 3,
+    position: 'relative',      // necesario para posicionar la fila de iconos en absoluto
+    overflow: 'hidden',
   },
   emptyCell: {
     backgroundColor: 'transparent',
@@ -192,9 +248,20 @@ const styles = StyleSheet.create({
   dayLabelSelected: {
     color: '#10B981',
   },
-  dot: {
-    width: 5, height: 5,
-    borderRadius: 3,
-    marginTop: 2,
+
+  /* Fila inferior de iconos combinados (pesa + comidas) */
+  iconBottomRow: {
+    position: 'absolute',
+    bottom: 4,
+    left: 0,
+    right: 0,
+    height: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  iconSpacing: {
+    marginHorizontal: 2,
   },
 });
