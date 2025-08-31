@@ -17,6 +17,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { signedImageUrl } from '@/lib/supabase';
 import { useNutritionStore } from '@/store/nutritionStore';
 import { WeightPad } from '@/components/nutrition/WeightPad';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type FoodItem = {
   name: string;
@@ -39,6 +40,7 @@ type FoodAnalysisResult = {
 export default function MealReviewScreen() {
   const { draftId } = useLocalSearchParams<{ draftId: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // Selectores estables (Zustand v5)
   const storeDraftId = useNutritionStore((s) => s.draftId);
@@ -215,7 +217,7 @@ export default function MealReviewScreen() {
       kcal: Math.round((it.kcal ?? 0) * mul),
       protein: Math.round((it.protein ?? 0) * mul),
       carbs: Math.round((it.carbs ?? 0) * mul),
-      fat: Math.round((it.fat ?? 0) * mul),
+      fat: Math.round((it.fat     ?? 0) * mul),
     }));
   }, [edited, servings]);
 
@@ -281,8 +283,12 @@ export default function MealReviewScreen() {
               <Image source={{ uri: bannerUrl ?? undefined }} style={styles.fullImage} resizeMode="contain" />
             </TouchableWithoutFeedback>
 
-            <TouchableOpacity style={styles.fullClose} onPress={() => setShowFull(false)}>
-              <Ionicons name="close" size={22} color="#22c55e" />
+            <TouchableOpacity
+              style={[styles.fullClose, { top: insets.top + 10 }]}
+              onPress={() => setShowFull(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <MaterialCommunityIcons name="close-circle-outline" size={26} color="#22c55e" />
             </TouchableOpacity>
           </View>
         </TouchableWithoutFeedback>
@@ -449,7 +455,6 @@ const styles = StyleSheet.create({
   fullImage: { width: '100%', height: '88%' },
   fullClose: {
     position: 'absolute',
-    top: 24,
     left: 16,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 999,

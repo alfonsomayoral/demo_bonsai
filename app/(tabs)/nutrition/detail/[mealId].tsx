@@ -11,7 +11,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { supabase, signedImageUrl } from '@/lib/supabase';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -105,7 +105,7 @@ function SegmentedRing({
   let fPct = 1 - pPct - cPct;
   if (fPct < 0) fPct = 0;
 
-  // Angulos exactos que suman 360
+  // Ángulos exactos que suman 360
   const pDeg = 360 * pPct;
   const cDeg = 360 * cPct;
   let fDeg = 360 - (pDeg + cDeg);
@@ -118,7 +118,7 @@ function SegmentedRing({
   let cursor = -90;
 
   const pPath = arcPath(cx, cy, r, cursor, pDeg + OVERLAP);
-  cursor += pDeg; // el solapado se "come" sobre el siguiente
+  cursor += pDeg;
   const cPath = arcPath(cx, cy, r, cursor - OVERLAP, cDeg + OVERLAP);
   cursor += cDeg;
   const fPath = arcPath(cx, cy, r, cursor - OVERLAP, fDeg + OVERLAP);
@@ -170,7 +170,7 @@ function MacroCard({
   borderColor?: string;
 }) {
   return (
-    <View style={[styles.macroCard, borderColor && { borderWidth: 1, borderColor }]}>
+    <View style={[styles.macroCard, borderColor && { borderWidth: 2, borderColor }]}>
       <View style={styles.macroIconWrap}>
         <MaterialCommunityIcons name={icon} size={18} color={iconColor} />
       </View>
@@ -212,6 +212,7 @@ function ScoreCard({
 
 export default function MealDetailScreen() {
   const { mealId } = useLocalSearchParams<{ mealId: string }>();
+  const insets = useSafeAreaInsets();
 
   const [meal, setMeal] = useState<Meal | null>(null);
   const [loading, setLoading] = useState(true);
@@ -322,8 +323,12 @@ export default function MealDetailScreen() {
                 <Image source={{ uri: banner ?? undefined }} style={styles.fullImage} resizeMode="contain" />
               </TouchableWithoutFeedback>
 
-              <TouchableOpacity style={styles.fullClose} onPress={() => setShowFull(false)}>
-                <MaterialCommunityIcons name="close" size={22} color="#22c55e" />
+              <TouchableOpacity
+                style={[styles.fullClose, { top: insets.top + 10 }]}
+                onPress={() => setShowFull(false)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <MaterialCommunityIcons name="close-circle-outline" size={26} color="#22c55e" />
               </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
@@ -423,7 +428,6 @@ const styles = StyleSheet.create({
   fullImage: { width: '100%', height: '88%' },
   fullClose: {
     position: 'absolute',
-    top: 24,
     left: 16,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 999,
@@ -475,7 +479,7 @@ const styles = StyleSheet.create({
   progressTrack: { height: 8, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.12)', marginTop: 10, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 6 },
 
-  section: { color: '#fff', fontSize: 18, fontWeight: '600', paddingHorizontal: 16, marginTop: 18, marginBottom: 8 },
+  section: { color: '#fff', fontSize: 22, fontWeight: '600', paddingHorizontal: 16, marginTop: 18, marginBottom: 8 },
 
   itemCard: {
     marginHorizontal: 16,
@@ -486,9 +490,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  itemTitle: { color: '#fff', fontWeight: '700', marginBottom: 6, fontSize: 14 },
+  itemTitle: { color: '#fff', fontWeight: '800', marginBottom: 6, fontSize: 16 },
   foodRow: { flexDirection: 'row', alignItems: 'center' },
-  foodSub: { color: TEXT_MID, fontSize: 12, marginLeft: 6 },
+  foodSub: { color: TEXT_MID, fontSize: 14, marginLeft: 6 },
   itemConf: { color: TEXT_MID, marginTop: 6, fontSize: 12 },
 
   error: { color: '#fff', textAlign: 'center', marginTop: 20 },

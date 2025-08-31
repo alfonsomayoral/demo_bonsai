@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     width: '24%',
   },
-  smallMetricLabel: { color: '#9CA3AF', fontSize: 12, fontWeight: '700' },
+  smallMetricLabel: { color: '#10B981', fontSize: 14, fontWeight: '700' },
   smallMetricValue: { color: '#E5E7EB', fontSize: 14, marginTop: 6, fontWeight: '700' },
 
   workoutList: { gap: 10 },
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
   },
-  exerciseName: { color: '#E5E7EB', fontWeight: '700', marginBottom: 6 },
+  exerciseName: { color: '#E5E7EB', fontWeight: '800', marginBottom: 6 },
   exerciseLine: { color: '#9CA3AF' },
 
   emptyText: {
