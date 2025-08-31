@@ -208,10 +208,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   weekdayText: {
-    color: '#9CA3AF',
+    color: '#10B981',
     width: `${100 / 7}%`,
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 14,
+    fontWeight: '700',
   },
   grid: {
     flexDirection: 'row',
