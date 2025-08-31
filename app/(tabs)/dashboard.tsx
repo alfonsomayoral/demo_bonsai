@@ -1,259 +1,293 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Dimensions,
+  TouchableOpacity,
+  Modal,
+  FlatList,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TrendingUp, TrendingDown, Activity, Target, Calendar, Award } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
+import { supabase } from '@/lib/supabase';
 
-const { width } = Dimensions.get('window');
+// Gráficas (repo: JesperLekland/react-native-svg-charts)
+import { LineChart, XAxis, YAxis, Grid } from 'react-native-svg-charts';
+import * as shape from 'd3-shape';
+import * as scale from 'd3-scale';
+import { Path } from 'react-native-svg';
 
-const weeklyData = [
-  { day: 'Mon', calories: 2100, burned: 450, weight: 75.2 },
-  { day: 'Tue', calories: 2050, burned: 520, weight: 75.1 },
-  { day: 'Wed', calories: 2200, burned: 480, weight: 75.0 },
-  { day: 'Thu', calories: 1950, burned: 600, weight: 74.9 },
-  { day: 'Fri', calories: 2150, burned: 420, weight: 74.8 },
-  { day: 'Sat', calories: 2300, burned: 380, weight: 74.9 },
-  { day: 'Sun', calories: 2000, burned: 500, weight: 75.0 },
-];
+const { width: SCREEN_W } = Dimensions.get('window');
 
-const achievements = [
-  { id: 1, title: '7-Day Streak', description: 'Logged meals for 7 days', icon: '🔥', unlocked: true },
-  { id: 2, title: 'Protein Goal', description: 'Hit protein target 5 days', icon: '💪', unlocked: true },
-  { id: 3, title: 'Workout Warrior', description: 'Complete 10 workouts', icon: '⚡', unlocked: false },
-];
+type ExerciseRow = { id: string; name: string };
+type MetricRow = { created_at: string; kg_per_rep: number };
+
+function formatDayLabel(d: Date) {
+  // mmm-dd (o dd/mm)
+  return d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+}
+
+function groupDailyAverage(rows: MetricRow[]) {
+  // agrupa por YYYY-MM-DD y saca promedio de kg_per_rep
+  const map: Record<string, { sum: number; n: number; date: Date }> = {};
+  for (const r of rows) {
+    const d = new Date(r.created_at);
+    const ymd = d.toISOString().slice(0, 10);
+    if (!map[ymd]) map[ymd] = { sum: 0, n: 0, date: new Date(d.getFullYear(), d.getMonth(), d.getDate()) };
+    map[ymd].sum += Number(r.kg_per_rep || 0);
+    map[ymd].n += 1;
+  }
+  const arr = Object.values(map)
+    .map((v) => ({ date: v.date, value: v.n > 0 ? v.sum / v.n : 0 }))
+    .sort((a, b) => +a.date - +b.date);
+  return arr;
+}
+
+function linearRegression(y: number[]) {
+  // x = 0..n-1
+  const n = y.length;
+  if (n === 0) return { m: 0, b: 0 };
+  const x = Array.from({ length: n }, (_, i) => i);
+  const sumX = x.reduce((a, b) => a + b, 0);
+  const sumY = y.reduce((a, b) => a + b, 0);
+  const sumXX = x.reduce((a, b) => a + b * b, 0);
+  const sumXY = x.reduce((a, b, i) => a + b * y[i], 0);
+  const denom = n * sumXX - sumX * sumX || 1;
+  const m = (n * sumXY - sumX * sumY) / denom;
+  const b = (sumY - m * sumX) / n;
+  return { m, b };
+}
 
 export default function Dashboard() {
-  const [selectedPeriod, setSelectedPeriod] = useState('week');
-  
-  const currentStats = {
-    weight: 75.0,
-    weightChange: -0.2,
-    calorieBalance: -150,
-    weeklyVolume: 12500,
-    consistency: 85,
-  };
+  const [loading, setLoading] = useState(true);
+  const [exercises, setExercises] = useState<ExerciseRow[]>([]);
+  const [selected, setSelected] = useState<ExerciseRow | null>(null);
+  const [dataPoints, setDataPoints] = useState<{ date: Date; value: number }[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const renderChart = () => {
-    const maxCalories = Math.max(...weeklyData.map(d => d.calories));
-    const maxBurned = Math.max(...weeklyData.map(d => d.burned));
+  // Carga lista de ejercicios a partir de métricas del usuario
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: userRes } = await supabase.auth.getUser();
+        const userId = userRes?.user?.id;
+        if (!userId) {
+          setExercises([]);
+          setSelected(null);
+          setDataPoints([]);
+          setLoading(false);
+          return;
+        }
 
-    return (
-      <Card variant="dark" style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Calories In vs Out</Text>
-        <View style={styles.chartLegend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#10B981' }]} />
-            <Text style={styles.legendText}>Consumed</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#EF4444' }]} />
-            <Text style={styles.legendText}>Burned</Text>
-          </View>
-        </View>
-        
-        <View style={styles.chart}>
-          {weeklyData.map((data, index) => {
-            const consumedHeight = (data.calories / maxCalories) * 120;
-            const burnedHeight = (data.burned / maxBurned) * 120;
-            
-            return (
-              <View key={data.day} style={styles.chartBar}>
-                <View style={styles.barContainer}>
-                  <View 
-                    style={[
-                      styles.bar, 
-                      { 
-                        height: consumedHeight, 
-                        backgroundColor: '#10B981',
-                        marginRight: 2,
-                      }
-                    ]} 
-                  />
-                  <View 
-                    style={[
-                      styles.bar, 
-                      { 
-                        height: burnedHeight, 
-                        backgroundColor: '#EF4444',
-                      }
-                    ]} 
-                  />
-                </View>
-                <Text style={styles.chartLabel}>{data.day}</Text>
-              </View>
-            );
-          })}
-        </View>
-      </Card>
-    );
-  };
+        // Traemos métricas con join al ejercicio para deduplicar en cliente
+        const { data: metrics, error } = await supabase
+          .from('exercise_workout_metrics')
+          .select('exercise_id, exercises(name)')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(500);
+        if (error) throw error;
 
-  const renderWeightTrend = () => {
-    const minWeight = Math.min(...weeklyData.map(d => d.weight));
-    const maxWeight = Math.max(...weeklyData.map(d => d.weight));
-    const range = maxWeight - minWeight || 1;
-    const chartWidth = width - 100;
-    const pointWidth = (chartWidth - 40) / (weeklyData.length - 1);
+        const map = new Map<string, string>();
+        for (const row of (metrics ?? []) as any[]) {
+          if (row.exercise_id && row.exercises?.name) {
+            if (!map.has(row.exercise_id)) map.set(row.exercise_id, row.exercises.name as string);
+          }
+        }
+        // Si no hay métricas, intenta cargar ejercicios del usuario (o globales)
+        if (map.size === 0) {
+          const { data: ex, error: exErr } = await supabase
+            .from('exercises')
+            .select('id, name')
+            .or(`user_id.eq.${userId},user_id.is.null`)
+            .limit(50);
+          if (exErr || !ex) {
+            setExercises([]);
+            setSelected(null);
+          } else {
+            setExercises(ex as ExerciseRow[]);
+            setSelected(ex[0] ?? null);
+          }
+        } else {
+          const list: ExerciseRow[] = Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+          setExercises(list);
+          setSelected(list[0] ?? null);
+        }
+      } catch (e) {
+        console.error('Load exercises error', e);
+        setExercises([]);
+        setSelected(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-    return (
-      <Card variant="dark" style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Weight Trend</Text>
-        <View style={styles.weightChart}>
-          <View style={styles.weightLine}>
-            {weeklyData.map((data, index) => {
-              const y = ((maxWeight - data.weight) / range) * 80;
-              const x = index * pointWidth;
-              
-              return (
-                <View
-                  key={index}
-                  style={[
-                    styles.weightPoint,
-                    {
-                      left: x,
-                      top: y,
-                    }
-                  ]}
-                />
-              );
-            })}
-          </View>
-          <View style={styles.weightLabels}>
-            {weeklyData.map((data, index) => (
-              <Text key={index} style={styles.weightLabel}>
-                {data.day}
-              </Text>
-            ))}
-          </View>
-        </View>
-      </Card>
-    );
-  };
+  // Carga de series para el ejercicio elegido
+  useEffect(() => {
+    (async () => {
+      try {
+        setDataPoints([]);
+        if (!selected) return;
+        const { data: userRes } = await supabase.auth.getUser();
+        const userId = userRes?.user?.id;
+        if (!userId) return;
+
+        const { data, error } = await supabase
+          .from('exercise_workout_metrics')
+          .select('created_at, kg_per_rep')
+          .eq('user_id', userId)
+          .eq('exercise_id', selected.id)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        const daily = groupDailyAverage((data ?? []) as MetricRow[]);
+        setDataPoints(daily);
+      } catch (e) {
+        console.error('Load metrics error', e);
+        setDataPoints([]);
+      }
+    })();
+  }, [selected?.id]);
+
+  const yValues = useMemo(() => dataPoints.map((p) => p.value), [dataPoints]);
+  const dates = useMemo(() => dataPoints.map((p) => p.date), [dataPoints]);
+
+  // Línea de tendencia sobre los yValues
+  const trend = useMemo(() => {
+    if (yValues.length === 0) return [];
+    if (yValues.length === 1) return [yValues[0], yValues[0]];
+    const { m, b } = linearRegression(yValues);
+    // valores predichos en x=0..n-1
+    return yValues.map((_, i) => m * i + b);
+  }, [yValues]);
+
+  const contentInset = { top: 20, bottom: 20 };
+  const chartWidth = SCREEN_W - 40; // padding lateral
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Dashboard</Text>
-          <View style={styles.periodSelector}>
-            <TouchableOpacity
-              style={[styles.periodButton, selectedPeriod === 'week' && styles.periodButtonActive]}
-              onPress={() => setSelectedPeriod('week')}
-            >
-              <Text style={[styles.periodText, selectedPeriod === 'week' && styles.periodTextActive]}>
-                Week
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.periodButton, selectedPeriod === 'month' && styles.periodButtonActive]}
-              onPress={() => setSelectedPeriod('month')}
-            >
-              <Text style={[styles.periodText, selectedPeriod === 'month' && styles.periodTextActive]}>
-                Month
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.headerTitle}>Progress</Text>
+
+          {/* Selector de ejercicio (abre modal) */}
+          <TouchableOpacity
+            style={styles.exerciseBtn}
+            onPress={() => setPickerOpen(true)}
+            disabled={loading || exercises.length === 0}
+          >
+            <Text style={styles.exerciseBtnText}>
+              {loading ? 'Loading…' : selected?.name ?? 'Select exercise'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Key Metrics */}
-        <View style={styles.metricsGrid}>
-          <Card variant="dark" style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Text style={styles.metricLabel}>Current Weight</Text>
-              <TrendingDown size={16} color="#10B981" />
-            </View>
-            <Text style={styles.metricValue}>{currentStats.weight} kg</Text>
-            <Text style={styles.metricChange}>
-              {currentStats.weightChange > 0 ? '+' : ''}{currentStats.weightChange} kg this week
-            </Text>
-          </Card>
-
-          <Card variant="dark" style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Text style={styles.metricLabel}>Calorie Balance</Text>
-              <Activity size={16} color="#EF4444" />
-            </View>
-            <Text style={[styles.metricValue, { color: currentStats.calorieBalance < 0 ? '#EF4444' : '#10B981' }]}>
-              {currentStats.calorieBalance > 0 ? '+' : ''}{currentStats.calorieBalance}
-            </Text>
-            <Text style={styles.metricChange}>Daily average</Text>
-          </Card>
-
-          <Card variant="dark" style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Text style={styles.metricLabel}>Training Volume</Text>
-              <Target size={16} color="#3B82F6" />
-            </View>
-            <Text style={styles.metricValue}>{currentStats.weeklyVolume.toLocaleString()}</Text>
-            <Text style={styles.metricChange}>kg this week</Text>
-          </Card>
-
-          <Card variant="dark" style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Text style={styles.metricLabel}>Consistency</Text>
-              <Award size={16} color="#F59E0B" />
-            </View>
-            <Text style={styles.metricValue}>{currentStats.consistency}%</Text>
-            <Text style={styles.metricChange}>Tracking rate</Text>
-          </Card>
-        </View>
-
-        {/* Charts */}
-        {renderChart()}
-        {renderWeightTrend()}
-
-        {/* Achievements */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Achievements</Text>
-          {achievements.map((achievement) => (
-            <Card 
-              key={achievement.id} 
-              variant="dark"
-              style={[
-                styles.achievementCard,
-                !achievement.unlocked && styles.achievementCardLocked
-              ].filter(Boolean) as import('react-native').ViewStyle[]}
-            >
-              <Text style={styles.achievementIcon}>{achievement.icon}</Text>
-              <View style={styles.achievementInfo}>
-                <Text style={[
-                  styles.achievementTitle,
-                  !achievement.unlocked && styles.achievementTitleLocked
-                ]}>
-                  {achievement.title}
-                </Text>
-                <Text style={[
-                  styles.achievementDescription,
-                  !achievement.unlocked && styles.achievementDescriptionLocked
-                ]}>
-                  {achievement.description}
-                </Text>
-              </View>
-              {achievement.unlocked && (
-                <View style={styles.achievementBadge}>
-                  <Text style={styles.achievementBadgeText}>✓</Text>
-                </View>
+        {/* Modal selector */}
+        <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Choose exercise</Text>
+              {loading ? (
+                <ActivityIndicator color="#10B981" />
+              ) : (
+                <FlatList
+                  data={exercises}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.modalItem}
+                      onPress={() => {
+                        setSelected(item);
+                        setPickerOpen(false);
+                      }}
+                    >
+                      <Text style={styles.modalItemText}>{item.name}</Text>
+                    </TouchableOpacity>
+                  )}
+                  ItemSeparatorComponent={() => <View style={styles.separator} />}
+                  ListEmptyComponent={<Text style={styles.emptyText}>No exercises found</Text>}
+                />
               )}
-            </Card>
-          ))}
-        </View>
+              <TouchableOpacity style={styles.modalClose} onPress={() => setPickerOpen(false)}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
-        {/* Weekly Summary */}
-        <Card style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>This Week's Summary</Text>
-          <View style={styles.summaryStats}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>5</Text>
-              <Text style={styles.summaryLabel}>Workouts</Text>
+        {/* Bezier Line Chart + Trend line */}
+        <Card variant="dark" style={styles.chartCard}>
+          <Text style={styles.chartTitle}>
+            {selected ? `${selected.name} • kg/rep` : 'Exercise • kg/rep'}
+          </Text>
+
+          {dataPoints.length === 0 ? (
+            <View style={[styles.chartEmpty, styles.center]}>
+              <Text style={styles.emptyText}>No data yet for this exercise</Text>
             </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>14,850</Text>
-              <Text style={styles.summaryLabel}>Calories</Text>
+          ) : (
+            <View style={{ paddingRight: 8 }}>
+              <View style={{ flexDirection: 'row', height: 220 }}>
+                {/* Y axis */}
+                <YAxis
+                  data={yValues}
+                  contentInset={contentInset}
+                  svg={{ fill: '#9CA3AF', fontSize: 10 }}
+                  numberOfTicks={6}
+                  formatLabel={(value: number) => `${Math.round(value)}`}
+                />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  {/* Serie principal suavizada (bezier) */}
+                  <LineChart
+                    style={{ flex: 1 }}
+                    data={yValues}
+                    svg={{ stroke: '#10B981', strokeWidth: 3 }}
+                    contentInset={contentInset}
+                    curve={shape.curveNatural} // suavizado tipo "bezier"
+                  >
+                    <Grid svg={{ stroke: 'rgba(255,255,255,0.08)' }} />
+                  </LineChart>
+
+                  {/* Línea de tendencia superpuesta (misma escala) */}
+                  {trend.length >= 2 && (
+                    <LineChart
+                      style={StyleSheet.absoluteFill}
+                      data={trend}
+                      svg={{ stroke: '#60A5FA', strokeWidth: 2, strokeDasharray: [6, 6] }}
+                      contentInset={contentInset}
+                      curve={shape.curveLinear}
+                    />
+                  )}
+                </View>
+              </View>
+
+              {/* X axis: sólo días con entreno (sin días vacíos) */}
+              <XAxis
+                style={{ marginTop: 8, marginLeft: 28 }}
+                data={dates}
+                scale={scale.scaleTime}
+                formatLabel={(value: Date, index: number) => formatDayLabel(dates[index])}
+                svg={{ fill: '#9CA3AF', fontSize: 10 }}
+                contentInset={{ left: 10, right: 10 }}
+              />
             </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>98%</Text>
-              <Text style={styles.summaryLabel}>Goal Achievement</Text>
+          )}
+
+          {/* Leyenda simple */}
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendSwatch, { backgroundColor: '#10B981' }]} />
+              <Text style={styles.legendText}>kg/rep (daily avg)</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendSwatch, { backgroundColor: '#60A5FA' }]} />
+              <Text style={styles.legendText}>Trend</Text>
             </View>
           </View>
         </Card>
@@ -262,242 +296,77 @@ export default function Dashboard() {
   );
 }
 
+/* ───────────── estilos ───────────── */
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 100,
-  },
+  container: { flex: 1, backgroundColor: '#000' },
+  content: { padding: 20, paddingBottom: 100 },
+
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
-  },
-  periodSelector: {
-    flexDirection: 'row',
-    backgroundColor: '#374151',
-    borderRadius: 8,
-    padding: 2,
-  },
-  periodButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  periodButtonActive: {
-    backgroundColor: '#10B981',
-  },
-  periodText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#9CA3AF',
-  },
-  periodTextActive: {
-    color: '#FFFFFF',
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
-  },
-  metricCard: {
-    width: (width - 52) / 2,
-    padding: 16,
-  },
-  metricHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  metricLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#9CA3AF',
-  },
-  metricValue: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  metricChange: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#9CA3AF',
-  },
-  chartContainer: {
-    marginBottom: 24,
-  },
-  chartTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
     marginBottom: 16,
-  },
-  chartLegend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-    marginBottom: 20,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  legendText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#9CA3AF',
-  },
-  chart: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    height: 140,
-  },
-  chartBar: {
-    alignItems: 'center',
-  },
-  barContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 120,
-    marginBottom: 8,
-  },
-  bar: {
-    width: 12,
-    borderRadius: 6,
-  },
-  chartLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#9CA3AF',
-  },
-  weightChart: {
-    height: 120,
-    position: 'relative',
-  },
-  weightLine: {
-    flex: 1,
-    position: 'relative',
-  },
-  weightPoint: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-  },
-  weightLabels: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
   },
-  weightLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#9CA3AF',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  achievementCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    padding: 16,
-  },
-  achievementCardLocked: {
-    opacity: 0.6,
-  },
-  achievementIcon: {
-    fontSize: 24,
-    marginRight: 16,
-  },
-  achievementInfo: {
-    flex: 1,
-  },
-  achievementTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  achievementTitleLocked: {
-    color: '#9CA3AF',
-  },
-  achievementDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#9CA3AF',
-  },
-  achievementDescriptionLocked: {
-    color: '#6B7280',
-  },
-  achievementBadge: {
-    width: 24,
-    height: 24,
+  headerTitle: { fontSize: 28, color: '#fff', fontFamily: 'Inter-Bold' },
+
+  exerciseBtn: {
+    backgroundColor: '#191B1F',
     borderRadius: 12,
-    backgroundColor: '#10B981',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  exerciseBtnText: { color: '#D1D5DB', fontFamily: 'Inter-SemiBold' },
+
+  chartCard: { padding: 16, marginTop: 8 },
+  chartTitle: { color: '#fff', fontSize: 16, fontFamily: 'Inter-SemiBold', marginBottom: 8 },
+
+  chartEmpty: { height: 220, backgroundColor: '#111318', borderRadius: 12 },
+  center: { alignItems: 'center', justifyContent: 'center' },
+
+  legendRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 12,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center' },
+  legendSwatch: { width: 10, height: 10, borderRadius: 2, marginRight: 6 },
+  legendText: { color: '#9CA3AF', fontSize: 12 },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 20,
   },
-  achievementBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
+  modalCard: {
+    width: SCREEN_W - 40,
+    backgroundColor: '#141518',
+    borderRadius: 14,
+    padding: 14,
+    maxHeight: 420,
   },
-  summaryCard: {
-    backgroundColor: '#10B981',
-    padding: 24,
+  modalTitle: { color: '#fff', fontSize: 16, fontFamily: 'Inter-SemiBold', marginBottom: 10 },
+  modalItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    backgroundColor: '#191B1F',
+    borderRadius: 10,
   },
-  summaryTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
-    marginBottom: 16,
-    textAlign: 'center',
+  modalItemText: { color: '#E5E7EB', fontSize: 14 },
+  separator: { height: 8 },
+  emptyText: { color: '#9CA3AF', fontSize: 13, textAlign: 'center' },
+
+  modalClose: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 10,
+    backgroundColor: '#0EA5E9',
+    borderRadius: 8,
   },
-  summaryStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  summaryItem: {
-    alignItems: 'center',
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#D1FAE5',
-    textAlign: 'center',
-  },
+  modalCloseText: { color: '#fff', fontFamily: 'Inter-SemiBold' },
 });
