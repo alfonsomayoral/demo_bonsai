@@ -173,6 +173,9 @@ export type Routine          = Database['public']['Tables']['routines']['Row'];
 export type ExerciseSet      = Database['public']['Tables']['exercise_sets']['Row'];
 export type SessionExercise  = Database['public']['Tables']['session_exercises']['Row'];
 export type WorkoutSession   = Database['public']['Tables']['workout_sessions']['Row'];
+/** ⟵ NUEVO: alias usado por workoutStore para insertar métricas */
+export type ExerciseWorkoutMetricsInsert =
+  Database['public']['Tables']['exercise_workout_metrics']['Insert'];
 
 export const mockExercises: Exercise[] = [
   { id: '0001', user_id: null, name: 'Push-Up', muscle_group: 'chest', description: 'Classic body-weight push movement.', image_url: null, difficulty: 'beginner' },
