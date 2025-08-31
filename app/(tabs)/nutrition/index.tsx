@@ -1,4 +1,3 @@
-// app/(tabs)/nutrition/index.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -24,7 +23,6 @@ import ConcentricMacroRings from '@/components/nutrition/ConcentricMacroRings';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-/* --------------------- objetivos por defecto ---------------------- */
 const TARGETS = {
   calories: 2200,
   protein: 165,
@@ -32,7 +30,6 @@ const TARGETS = {
   fat: 73,
 };
 
-/* ------------------------- helpers varios ------------------------- */
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
 const formatDateTime = (iso?: string) => {
@@ -59,26 +56,36 @@ const yesterdayYmd = () => {
   return d.toISOString().slice(0, 10);
 };
 
-/* ------------------------- componente macro ------------------------ */
 function MacroRing({
   label,
   iconName,
   value,
   target,
   color,
+  playKey,
 }: {
   label: 'Protein' | 'Carbs' | 'Fats';
   iconName: keyof typeof MaterialCommunityIcons.glyphMap;
   value: number;
   target: number;
   color: string;
+  /** Clave para reanimar al cambiar página */
+  playKey?: any;
 }) {
   const progress = clamp01(value / target);
   return (
     <View style={styles.macroCard}>
       <Text style={[styles.macroTitle, { color }]}>{label}</Text>
       <View style={styles.macroRingWrapper}>
-        <ProgressRing size={84} stroke={8} progress={progress} color={color} trackColor="#1F2937">
+        <ProgressRing
+          size={84}
+          stroke={8}
+          progress={progress}
+          color={color}
+          trackColor="#1F2937"
+          duration={800}
+          playKey={playKey}
+        >
           <MaterialCommunityIcons name={iconName} size={28} color={color} />
         </ProgressRing>
       </View>
@@ -89,7 +96,6 @@ function MacroRing({
   );
 }
 
-/* ---------------------- contenedor deslizante ---------------------- */
 function StatsPager({
   consumed,
 }: {
@@ -97,9 +103,8 @@ function StatsPager({
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
-
-  // Ancho REAL del viewport del pager (afectado por el padding del ScrollView vertical)
   const [viewportW, setViewportW] = useState<number>(SCREEN_W);
+
   const handleLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
     if (w > 0 && w !== viewportW) setViewportW(w);
@@ -121,16 +126,12 @@ function StatsPager({
         showsHorizontalScrollIndicator={false}
         onLayout={handleLayout}
         onMomentumScrollEnd={onScrollEnd}
-        // El width del content = viewportW * número de páginas
         contentContainerStyle={{ width: viewportW * 2 }}
-        // Que el frame del pager ocupe el ancho disponible (ya sin "peeks")
         style={styles.pagerScroll}
       >
-        {/* Página 1 (ancho = viewport) */}
+        {/* Página 1 */}
         <View style={[styles.pagerPage, { width: viewportW }]}>
-          {/* Contenido centrado y del MISMO ancho en ambas páginas */}
           <View style={[styles.pageContent, { width: viewportW }]}>
-            {/* Card: Calories (fondo #191B1F) */}
             <View style={styles.cardSurface}>
               <Text style={styles.kcalTitle}>Calories Target</Text>
 
@@ -147,6 +148,8 @@ function StatsPager({
                     progress={kcalProgress}
                     color="#10B981"
                     trackColor="#1F2937"
+                    duration={900}
+                    playKey={page}
                   >
                     <MaterialCommunityIcons name="fire-circle" size={30} color="#10B981" />
                   </ProgressRing>
@@ -154,7 +157,7 @@ function StatsPager({
               </View>
             </View>
 
-            {/* Tres cards de macros (todos fondo #191B1F) */}
+            {/* Tres cards de macros */}
             <View style={styles.macroRow}>
               <MacroRing
                 label="Protein"
@@ -162,6 +165,7 @@ function StatsPager({
                 value={consumed.protein}
                 target={TARGETS.protein}
                 color="#FF6B6B"
+                playKey={page}
               />
               <MacroRing
                 label="Carbs"
@@ -169,6 +173,7 @@ function StatsPager({
                 value={consumed.carbs}
                 target={TARGETS.carbs}
                 color="#FFD93D"
+                playKey={page}
               />
               <MacroRing
                 label="Fats"
@@ -176,12 +181,13 @@ function StatsPager({
                 value={consumed.fat}
                 target={TARGETS.fat}
                 color="#FF8E53"
+                playKey={page}
               />
             </View>
           </View>
         </View>
 
-        {/* Página 2 (ancho = viewport) */}
+        {/* Página 2 */}
         <View style={[styles.pagerPage, { width: viewportW }]}>
           <View style={[styles.pageContent, { width: viewportW }]}>
             <View style={styles.cardSurface}>
@@ -196,10 +202,10 @@ function StatsPager({
                 carbsTarget={TARGETS.carbs}
                 fat={consumed.fat}
                 fatTarget={TARGETS.fat}
+                playKey={page}
               />
 
-              {/* Leyenda */}
-              <View style={styles.legendRow}>
+              <View className="legendRow" style={styles.legendRow}>
                 <View style={styles.legendItem}>
                   <MaterialCommunityIcons name="food-drumstick" size={16} color="#FF6B6B" />
                   <Text style={styles.legendText}>Protein: {Math.round(consumed.protein)} g</Text>
@@ -224,7 +230,7 @@ function StatsPager({
         </View>
       </ScrollView>
 
-      {/* indicador de página (2 bullets) */}
+      {/* bullets */}
       <View style={styles.pagerDots}>
         <View style={[styles.dot, page === 0 ? styles.dotActive : styles.dotInactive]} />
         <View style={[styles.dot, page === 1 ? styles.dotActive : styles.dotInactive]} />
@@ -233,7 +239,6 @@ function StatsPager({
   );
 }
 
-/* --------------------------- pantalla home -------------------------- */
 export default function NutritionHome() {
   const meals = useNutritionStore((s: any) => s.todayMeals || []);
   const totals = useNutritionStore(
@@ -252,26 +257,15 @@ export default function NutritionHome() {
   useEffect(() => {
     (async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          setRecentMeals([]);
-          return;
-        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setRecentMeals([]); return; }
         const { data, error } = await supabase
           .from('meals')
-          .select(
-            'id, logged_at, total_kcal, total_protein, total_carbs, total_fat, meal_items(name, image_path)'
-          )
+          .select('id, logged_at, total_kcal, total_protein, total_carbs, total_fat, meal_items(name, image_path)')
           .eq('user_id', user.id)
           .order('logged_at', { ascending: false })
           .limit(3);
-
-        if (error || !data) {
-          setRecentMeals([]);
-          return;
-        }
+        if (error || !data) { setRecentMeals([]); return; }
         setRecentMeals(data);
       } catch {
         setRecentMeals([]);
@@ -331,7 +325,6 @@ export default function NutritionHome() {
     [totals]
   );
 
-  // Preparación “Recently uploaded”
   const listMeals = recentMeals.map((m: any) => {
     const imagePath = m.meal_items?.find((it: any) => !!it.image_path)?.image_path ?? null;
     return {
@@ -351,19 +344,15 @@ export default function NutritionHome() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Streak pill */}
         <View style={styles.streakPill}>
           <Text style={styles.streakEmoji}>🔥</Text>
           <Text style={styles.streakText}>{streak}</Text>
         </View>
 
-        {/* ---------- CONTENEDOR DESLIZANTE (2 páginas) ---------- */}
         <StatsPager consumed={consumed} />
 
-        {/* Agua */}
         <WaterCard />
 
-        {/* Recientes */}
         <Text style={styles.sectionTitle}>Recently uploaded</Text>
         {listMeals.map((m: any) => (
           <MealCard
@@ -387,12 +376,10 @@ export default function NutritionHome() {
   );
 }
 
-/* ----------------------------- estilos ----------------------------- */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0B0B0D' },
   scroll: { padding: 20, paddingBottom: 60 },
 
-  /* streak pill */
   streakPill: {
     backgroundColor: '#191B1F',
     borderRadius: 14,
@@ -406,20 +393,10 @@ const styles = StyleSheet.create({
   streakEmoji: { fontSize: 18, marginRight: 4 },
   streakText: { color: '#fff', fontFamily: 'Inter-SemiBold', fontSize: 13 },
 
-  /* pager */
-  pagerContainer: {
-    marginBottom: 20,
-  },
-  pagerScroll: {
-    alignSelf: 'stretch', // ocupa el ancho disponible en el layout (viewport real)
-  },
-  pagerPage: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pageContent: {
-    // mismo ancho para ambas páginas; se asigna dinámicamente con viewportW
-  },
+  pagerContainer: { marginBottom: 20 },
+  pagerScroll: { alignSelf: 'stretch' },
+  pagerPage: { justifyContent: 'center', alignItems: 'center' },
+  pageContent: {},
   pagerDots: {
     marginTop: 6,
     flexDirection: 'row',
@@ -430,22 +407,16 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: '#10B981' },
   dotInactive: { backgroundColor: '#374151' },
 
-  /* Cards de la página 1 */
   cardSurface: {
     backgroundColor: '#191B1F',
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
   },
-  kcalTitle: {
-    color: '#10B981',
-    fontSize: 20,
-    fontFamily: 'Inter-SemiBold',
-  },
-  kcalBig: { color: '#FFFFFF', fontSize: 20, fontFamily: 'Inter-Bold' },
+  kcalTitle: { color: '#10B981', fontSize: 24, fontFamily: 'Inter-Bold' },
+  kcalBig: { color: '#FFFFFF', fontSize: 22, fontFamily: 'Inter-Bold' },
   kcalRing: { width: 110, height: 110, alignItems: 'center', justifyContent: 'center' },
 
-  /* macro grid */
   macroRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -459,28 +430,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 4,
   },
-  macroTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 15,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
+  macroTitle: { fontFamily: 'Inter-Bold', fontSize: 15, marginBottom: 4, textAlign: 'center' },
   macroRingWrapper: { width: 90, height: 90, alignItems: 'center', justifyContent: 'center' },
-  macroBottom: { color: '#9CA3AF', fontSize: 12, marginTop: 8 },
+  macroBottom: { color: '#9CA3AF', fontSize: 13, marginTop: 8 },
 
-  /* leyenda de página 2 */
   legendRow: {
     marginTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.07)',
     paddingTop: 10,
   },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  legendText: { color: '#D1D5DB', marginLeft: 8, fontSize: 13 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  legendText: { color: '#D1D5DB', marginLeft: 8, fontSize: 14 },
 
   sectionTitle: {
     color: '#FFFFFF',

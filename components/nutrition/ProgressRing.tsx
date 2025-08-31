@@ -1,18 +1,26 @@
-import React, { PropsWithChildren } from 'react';
+import React, { PropsWithChildren, useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import { CircularProgressBase } from 'react-native-circular-progress-indicator';
 
 interface Props extends PropsWithChildren {
   size?: number;
   stroke?: number;
-  progress: number;       // 0 – 1
-  color?:   string;       // color del anillo
-  trackColor?: string;    // color del track
+  /** Progreso 0–1 */
+  progress: number;
+  /** Color del anillo activo */
+  color?: string;
+  /** Track (inactivo) */
+  trackColor?: string;
+  /** Duración de la animación (ms) */
+  duration?: number;
+  /** Clave para reanimar cuando cambie (por ejemplo, la página visible) */
+  playKey?: any;
 }
 
 /**
- * Anillo de progreso sin contenido textual.
- * El centro queda libre: lo que pongas como children se renderiza centrado.
+ * Progress ring animado usando `react-native-circular-progress-indicator`.
+ * Cada vez que cambia `progress` o `playKey`, el anillo se reinicia (0%)
+ * y se anima hasta el valor objetivo.
  */
 export const ProgressRing: React.FC<Props> = ({
   size = 120,
@@ -20,36 +28,46 @@ export const ProgressRing: React.FC<Props> = ({
   progress,
   color = '#10B981',
   trackColor = '#2A2D33',
+  duration = 900,
+  playKey,
   children,
 }) => {
-  const r = (size - stroke) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const circ = 2 * Math.PI * r;
-  const dash = circ * (1 - Math.max(0, Math.min(1, progress)));
+  const [display, setDisplay] = useState(0); // 0..100
+
+  // Normaliza 0..1 → 0..100
+  const target = Math.round(Math.max(0, Math.min(1, progress)) * 100);
+
+  useEffect(() => {
+    // Reinicia a 0 y anima hacia el objetivo
+    setDisplay(0);
+    const id = setTimeout(() => setDisplay(target), 20);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, playKey]);
+
+  const radius = (size - stroke) / 2;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      <Svg width={size} height={size}>
-        <Circle cx={cx} cy={cy} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
-        <Circle
-          cx={cx}
-          cy={cy}
-          r={r}
-          stroke={color}
-          strokeWidth={stroke}
-          strokeDasharray={`${circ} ${circ}`}
-          strokeDashoffset={dash}
-          strokeLinecap="round"
-          fill="none"
-        />
-      </Svg>
-      <View style={styles.center}>{children}</View>
+      <CircularProgressBase
+        value={display}
+        maxValue={100}
+        radius={radius}
+        duration={duration}
+        activeStrokeWidth={stroke}
+        inActiveStrokeWidth={stroke}
+        activeStrokeColor={color}
+        inActiveStrokeColor={trackColor}
+        inActiveStrokeOpacity={0.45}
+        strokeLinecap="round"
+      >
+        <View style={styles.center}>{children}</View>
+      </CircularProgressBase>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { alignItems: 'center', justifyContent: 'center' },
-  center: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  center: { alignItems: 'center', justifyContent: 'center' },
 });
