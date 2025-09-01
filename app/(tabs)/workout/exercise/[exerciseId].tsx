@@ -270,6 +270,10 @@ export default function ExerciseInfoScreen() {
             </>
           )}
         </View>
+        
+        <View style={styles.info}>
+          <Text style={styles.label}>Analysis Charts:</Text>
+        </View>
 
         {/* ───────── Charts en carrusel (una página por chart) ───────── */}
         <View style={{ marginTop: 16 }}>
@@ -353,7 +357,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
 
   info: { marginTop: 16 },
-  label: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  label: { fontSize: 15, fontWeight: '700', color: colors.primary },
   value: { fontSize: 15, color: colors.text, marginTop: 2 },
 
   /* Carrusel de charts */
