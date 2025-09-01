@@ -30,12 +30,12 @@ export function WorkoutSummaryCard({ exercise }: { exercise: SummaryExercise }) 
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 12, borderWidth: 0, borderColor: colors.primary, borderRadius: 12, backgroundColor: '#666' },
-  name: { fontSize: 16, fontWeight: '600', color: '#FFF', marginBottom: 8 },
+  container: {  marginBottom: 13, borderWidth: 0, borderColor: colors.primary, borderRadius: 14, backgroundColor: '#666' },
+  name: { fontSize: 16, fontWeight: '700', color: '#FFF', marginBottom: 6 },
   stats: { flexDirection: 'row', justifyContent: 'space-around', color: '#000' },
   stat: { alignItems: 'center', color: '#000', },
   value1: { fontSize: 18, fontWeight: '700', color: '#FF2D8A', },
   value2: { fontSize: 18, fontWeight: '700', color: '#FFB347', },
   value3: { fontSize: 18, fontWeight: '700', color: colors.primary, },
   label: { fontSize: 12, color: '#FFF', fontWeight: 'bold'  },
-});
+})

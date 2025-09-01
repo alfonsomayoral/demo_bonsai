@@ -7,7 +7,9 @@ const monthNames = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December'
 ];
-const dayNames = ['S','M','T','W','T','F','S'];
+
+// Semana iniciando en LUNES
+const dayNames = ['M','T','W','T','F','S','S'];
 
 /** YYYY-MM-DD en horario local (sin toISOString para evitar desfases) */
 function ymdLocalFromParts(year: number, monthIndex: number, day: number) {
@@ -23,7 +25,8 @@ function ymdLocalToday() {
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
-function getFirstDayOfWeek(year: number, month: number) {
+function getFirstDayOfWeekSundayIndex(year: number, month: number) {
+  // 0..6 (0 = Domingo, 1 = Lunes, ...)
   return new Date(year, month, 1).getDay();
 }
 
@@ -56,11 +59,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   setCurrentYear,
 }) => {
   const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-  const firstDayOfWeek = getFirstDayOfWeek(currentYear, currentMonth);
+
+  // Índice del primer día del mes con base DOMINGO (0=Dom,...6=Sáb)
+  const firstSundayIdx = getFirstDayOfWeekSundayIndex(currentYear, currentMonth);
+
+  // Convertimos a índice con base LUNES (0=Lun,...6=Dom)
+  // Si el primer día es Lunes (1 en base domingo), queremos 0 "pads".
+  // Fórmula estándar: (idxDomingo + 6) % 7
+  const leadingNulls = (firstSundayIdx + 6) % 7;
+
   const todayString = ymdLocalToday();
 
   // Construcción de la cuadricula: sólo días del mes (los previos se pintan vacíos)
-  const days: DayCell[] = Array(firstDayOfWeek).fill(null);
+  const days: DayCell[] = Array(leadingNulls).fill(null);
   for (let d = 1; d <= daysInMonth; d++) {
     days.push({ key: ymdLocalFromParts(currentYear, currentMonth, d), label: d });
   }
@@ -96,7 +107,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Días de la semana */}
+      {/* Días de la semana (L a D) */}
       <View style={styles.weekdaysRow}>
         {dayNames.map((d, i) => (
           <Text key={i} style={styles.weekdayText}>{d}</Text>
