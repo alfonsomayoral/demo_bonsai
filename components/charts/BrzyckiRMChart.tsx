@@ -96,5 +96,5 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 8 },
   chartBox: { width: '100%' },
   chart: { borderRadius: 12 },
-  rmText: { marginTop: 10, color: '#ef4444', fontSize: 16, fontWeight: '700' },
+  rmText: { marginTop: 10, color: '#10B981', fontSize: 16, fontWeight: '700' },
 });

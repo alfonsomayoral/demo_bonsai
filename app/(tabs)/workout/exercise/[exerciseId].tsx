@@ -114,7 +114,7 @@ export default function ExerciseInfoScreen() {
     })();
   }, [exerciseId]);
 
-  /* ───── cálculo 1RM (Brzycki) de la última sesión con set <10 reps y mayor peso ───── */
+  /* ───── cálculo 1RM (Brzycki) usando la última serie elegible global ───── */
   useEffect(() => {
     (async () => {
       try {
@@ -123,42 +123,43 @@ export default function ExerciseInfoScreen() {
         const uid = auth.user?.id;
         if (!uid || !exerciseId) return;
 
-        // 1) última session_exercises del user para este exercise
-        const { data: lastSE, error: seErr } = await supabase
+        // 1) obtenemos últimas session_exercises para este user+exercise
+        const { data: sessions, error: seErr } = await supabase
           .from('session_exercises')
-          .select('id')
+          .select('id, created_at')
           .eq('user_id', uid)
           .eq('exercise_id', exerciseId)
           .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(50);
 
-        if (seErr || !lastSE?.id) return;
+        if (seErr || !sessions?.length) return;
 
-        // 2) sets de esa session_exercise
-        const { data: sets, error: setsErr } = await supabase
+        const ids = sessions.map((s) => s.id);
+
+        // 2) buscamos la última serie elegible (<10 reps) global, priorizando fecha y, en empate, mayor peso
+        const { data: sets, error: setErr } = await supabase
           .from('exercise_sets')
-          .select('weight, reps')
-          .eq('session_exercise_id', lastSE.id);
+          .select('weight, reps, performed_at, created_at')
+          .in('session_exercise_id', ids)
+          .gt('reps', 0)
+          .lt('reps', 10)
+          .gt('weight', 0)
+          .order('performed_at', { ascending: false })
+          .order('created_at', { ascending: false })
+          .order('weight', { ascending: false })
+          .limit(1);
 
-        if (setsErr || !sets?.length) return;
+        if (setErr || !sets?.length) return;
 
-        const eligible = (sets as { weight: number; reps: number }[])
-          .filter((s) => Number(s.reps) > 0 && Number(s.reps) < 10)
-          .sort((a, b) => Number(b.weight) - Number(a.weight));
-
-        const pick = eligible[0] ?? null;
-        if (!pick) return;
-
-        const w = Number(pick.weight);
-        const r = Number(pick.reps);
+        const top = sets[0];
+        const w = Number(top.weight);
+        const r = Number(top.reps);
         const denom = 1.0278 - 0.0278 * r;
         if (denom <= 0) return;
 
-        const oneRM = w / denom;
-        setRm1(oneRM);
+        setRm1(w / denom);
       } catch (e) {
-        console.error('[exercise screen] rm', e);
+        console.error('[exercise screen] rm global', e);
         setRm1(null);
       }
     })();
@@ -269,9 +270,7 @@ export default function ExerciseInfoScreen() {
             </>
           )}
         </View>
-        <View style={styles.info}>
-          <Text style={styles.label}>Analysis:</Text>
-        </View>
+
         {/* ───────── Charts en carrusel (una página por chart) ───────── */}
         <View style={{ marginTop: 16 }}>
           <View onLayout={onPagerLayout}>
@@ -282,14 +281,13 @@ export default function ExerciseInfoScreen() {
               decelerationRate="fast"
               snapToAlignment="center"
               onMomentumScrollEnd={onMomentumEnd}
-              // cada página ocupa exactamente el ancho visible
               contentContainerStyle={{ width: viewportW * 2 }}
             >
               {/* Página 1: Volumen */}
               <View style={[styles.page, { width: viewportW }]}>
                 <View style={styles.pageInner}>
                   <ExerciseVolumeChart
-                    title={`${exercise.name} • Volume`}
+                    title={`${exercise.name} • volume`}
                     data={volumePoints}
                     height={220}
                   />
@@ -355,7 +353,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
 
   info: { marginTop: 16 },
-  label: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  label: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
   value: { fontSize: 15, color: colors.text, marginTop: 2 },
 
   /* Carrusel de charts */
@@ -364,7 +362,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pageInner: {
-    width: '90%', // margen lateral para centrar con “aire”
+    width: '90%',
     alignSelf: 'center',
   },
 

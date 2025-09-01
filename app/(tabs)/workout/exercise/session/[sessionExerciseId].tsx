@@ -81,7 +81,7 @@ export default function ExerciseSessionScreen() {
     setShowPad(false);
   };
 
-  /* sólo sets de este ejercicio en la sesión actual */
+  /* sólo sets de este ejercicio en la sesión actual (para render lista) */
   const filtered = useMemo(
     () => sets.filter((s) => s.session_exercise_id === sessionExerciseId),
     [sets, sessionExerciseId]
@@ -116,27 +116,58 @@ export default function ExerciseSessionScreen() {
     })();
   }, [sessionEx?.exercise_id]);
 
-  // 2) 1RM (Brzycki) estimado a partir de los sets de esta sesión (< 10 reps, mayor peso)
+  // 2) 1RM (Brzycki) usando la última serie elegible global del usuario para este ejercicio
   const [rm1, setRm1] = useState<number | null>(null);
   useEffect(() => {
-    // calcular 1RM desde sets de la sesión actual
-    const eligible = filtered
-      .filter((s) => Number(s.reps) > 0 && Number(s.reps) < 10 && Number(s.weight) > 0)
-      .sort((a, b) => Number(b.weight) - Number(a.weight));
-    if (eligible.length === 0) {
-      setRm1(null);
-      return;
-    }
-    const top = eligible[0];
-    const w = Number(top.weight);
-    const r = Number(top.reps);
-    const denom = 1.0278 - 0.0278 * r;
-    if (denom <= 0) {
-      setRm1(null);
-      return;
-    }
-    setRm1(w / denom);
-  }, [filtered]);
+    (async () => {
+      try {
+        setRm1(null);
+        if (!sessionEx) return;
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid || !sessionEx.exercise_id) return;
+
+        // 1) últimas session_exercises del user para este exercise
+        const { data: sessions, error: seErr } = await supabase
+          .from('session_exercises')
+          .select('id, created_at')
+          .eq('user_id', uid)
+          .eq('exercise_id', sessionEx.exercise_id)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (seErr || !sessions?.length) return;
+
+        const ids = sessions.map((s) => s.id);
+
+        // 2) última serie elegible global (<10 reps), priorizando fecha y, si empata, mayor peso
+        const { data: setsRows, error: setErr } = await supabase
+          .from('exercise_sets')
+          .select('weight, reps, performed_at, created_at')
+          .in('session_exercise_id', ids)
+          .gt('reps', 0)
+          .lt('reps', 10)
+          .gt('weight', 0)
+          .order('performed_at', { ascending: false })
+          .order('created_at', { ascending: false })
+          .order('weight', { ascending: false })
+          .limit(1);
+
+        if (setErr || !setsRows?.length) return;
+
+        const top = setsRows[0];
+        const w = Number(top.weight);
+        const r = Number(top.reps);
+        const denom = 1.0278 - 0.0278 * r;
+        if (denom <= 0) return;
+
+        setRm1(w / denom);
+      } catch (e) {
+        console.error('[sessionExercise] rm global', e);
+        setRm1(null);
+      }
+    })();
+  }, [sessionEx?.exercise_id, filtered.length]); // si se añaden sets, reintenta
 
   if (!exercise) {
     return (
@@ -222,7 +253,7 @@ export default function ExerciseSessionScreen() {
               </TouchableOpacity>
             </SafeAreaView>
             <ExerciseVolumeChart
-              title={`${exercise.name} • Volume`}
+              title={`${exercise.name} • volume`}
               data={volumePoints}
               height={240}
             />
@@ -247,7 +278,7 @@ export default function ExerciseSessionScreen() {
             ) : (
               <View style={styles.rmEmpty}>
                 <Text style={styles.rmEmptyText}>
-                  Add a set (&lt; 10 reps) to estimate 1RM
+                  Add a set (&lt; 10 reps) any day to estimate 1RM
                 </Text>
               </View>
             )}
