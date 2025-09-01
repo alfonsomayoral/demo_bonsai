@@ -48,14 +48,14 @@ export default function ExerciseVolumeChart({
     return yValues.map((_, i) => m * i + b);
   }, [yValues]);
 
-  // ChartKit espera: labels + datasets (podemos superponer la tendencia como segundo dataset)
+  // ChartKit: labels + datasets (tendencia como segundo dataset)
   const chartData = useMemo(
     () => ({
       labels,
       datasets: [
         {
           data: yValues,
-          color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`, // linea principal (verde)
+          color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`, // principal (verde)
           strokeWidth: 3,
         },
         ...(trend.length ? [{
@@ -64,34 +64,31 @@ export default function ExerciseVolumeChart({
           strokeWidth: 2,
         }] : []),
       ],
-      // Opcionalmente se puede pasar legend si quieres mostrarla (no requerido)
-      // legend: ['Volume', 'Trend'],
     }),
     [labels, yValues, trend]
   );
 
-  // Configuración visual del chart
   const chartConfig = {
     backgroundColor: '#191B1F',
     backgroundGradientFrom: '#191B1F',
     backgroundGradientTo: '#191B1F',
     decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(255,255,255,${opacity})`,        // textos (incluye valores)
-    labelColor: (opacity = 1) => `rgba(156,163,175,${opacity})`,    // labels de ejes
-    propsForDots: {
-      r: '4',                                                       // puntos visibles
-    },
-    propsForBackgroundLines: {
-      stroke: 'rgba(255,255,255,0.08)',
-    },
+    color: (opacity = 1) => `rgba(255,255,255,${opacity})`,        // textos
+    labelColor: (opacity = 1) => `rgba(156,163,175,${opacity})`,    // labels ejes
+    propsForDots: { r: '4' },                                       // puntos visibles
+    propsForBackgroundLines: { stroke: 'rgba(255,255,255,0.08)' },
   };
 
-  // Evitar cortes de etiquetas Y: medimos ancho disponible y damos un margen interno
+  // Medimos ancho disponible y ampliamos un poco el chart sin cortar Y labels
   const [chartW, setChartW] = useState<number>(SCREEN_W - 40 - 16);
   const onLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
     if (w && Math.abs(w - chartW) > 1) setChartW(w);
   };
+
+  // Ampliación del ancho (+24px) y compensación con márgenes negativos EN EL CONTENEDOR
+  const expandedWidth = Math.max(120, chartW + 24);
+  const horizontalComp = -12;
 
   return (
     <View style={styles.card}>
@@ -102,24 +99,41 @@ export default function ExerciseVolumeChart({
           <Text style={styles.emptyText}>No data yet</Text>
         </View>
       ) : (
-        <View style={styles.chartWrap} onLayout={onLayout}>
-          <LineChart
-            data={chartData}
-            width={Math.max(100, chartW)}
-            height={height}
-            chartConfig={chartConfig}
-            withShadow         // ⟵ sombra bajo la línea principal
-            withInnerLines
-            withOuterLines={false}
-            withDots           // ⟵ puntos en los datos
-            bezier             // ⟵ Bezier line chart
-            yLabelsOffset={8}  // ⟵ separa números del eje Y para que no se corten
-            xLabelsOffset={-4} // ⟵ ajusta un poco el X para que no colisione
-            style={styles.chart}
-            segments={6}
-            formatYLabel={(v: string) => `${Math.round(Number(v))}`}
-          />
-        </View>
+        <>
+          <View
+            style={[styles.chartWrap, { marginLeft: horizontalComp, marginRight: horizontalComp }]}
+            onLayout={onLayout}
+          >
+            <LineChart
+              data={chartData}
+              width={expandedWidth}
+              height={height}
+              chartConfig={chartConfig}
+              withShadow
+              withInnerLines
+              withOuterLines={false}
+              withDots
+              bezier
+              yLabelsOffset={10}
+              xLabelsOffset={-4}
+              style={styles.chart}   // ⟵ estilo ÚNICO (no array)
+              segments={6}
+              formatYLabel={(v: string) => `${Math.round(Number(v))}`}
+            />
+          </View>
+
+          {/* Leyenda debajo del eje X */}
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendSwatch, { backgroundColor: accentColor }]} />
+              <Text style={styles.legendText}>Volume</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendSwatch, { backgroundColor: trendColor }]} />
+              <Text style={styles.legendText}>Trend</Text>
+            </View>
+          </View>
+        </>
       )}
     </View>
   );
@@ -138,11 +152,28 @@ const styles = StyleSheet.create({
 
   chartWrap: {
     width: '100%',
-    // margen interior para evitar que se "corten" etiquetas y puntos
-    paddingLeft: 6,
-    paddingRight: 10,
+    // sin padding para aprovechar más ancho (márgenes negativos aplicados aquí)
   },
   chart: {
     borderRadius: 12,
   },
+
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 7,
+    justifyContent: 'center'
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendSwatch: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  legendText: { color: '#E5E7EB', fontSize: 12 },
 });
