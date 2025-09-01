@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -23,6 +24,8 @@ import ExerciseVolumeChart from '@/components/charts/ExerciseVolumeChart';
 import BrzyckiRMChart from '@/components/charts/BrzyckiRMChart';
 
 type MetricRow = { created_at: string; volume: number };
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 /** Agrupa por día y saca promedio del volumen por sesión del mismo día (x-eje con días entrenados). */
 function groupDailyAverage(rows: MetricRow[]) {
@@ -249,29 +252,45 @@ export default function ExerciseInfoScreen() {
           )}
         </View>
 
-        {/* CHART 1: Volumen (línea Bezier) */}
+        {/* ───────── Charts en carrusel (una página por chart) ───────── */}
         <View style={{ marginTop: 16 }}>
-          <ExerciseVolumeChart
-            title={`${exercise.name} • volume`}
-            data={volumePoints}
-            height={220}
-          />
-        </View>
-
-        {/* CHART 2: 1RM Brzycki (barras) */}
-        <View style={{ marginTop: 16 }}>
-          {rm1 ? (
-            <BrzyckiRMChart
-              title={`${exercise.name} • RM (Brzycki's formula)`}
-              rm1={rm1}
-            />
-          ) : (
-            <View style={styles.rmEmpty}>
-              <Text style={styles.rmEmptyText}>
-                Do a set &lt; 10 reps to estimate 1RM
-              </Text>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToAlignment="center"
+            contentContainerStyle={styles.carouselContent}
+          >
+            {/* Página 1: Volumen */}
+            <View style={[styles.page, { width: SCREEN_W }]}>
+              <View style={styles.pageInner}>
+                <ExerciseVolumeChart
+                  title={`${exercise.name} • volume`}
+                  data={volumePoints}
+                  height={220}
+                />
+              </View>
             </View>
-          )}
+
+            {/* Página 2: 1RM Brzycki */}
+            <View style={[styles.page, { width: SCREEN_W }]}>
+              <View style={styles.pageInner}>
+                {rm1 ? (
+                  <BrzyckiRMChart
+                    title={`${exercise.name} • RM (Brzycki's formula)`}
+                    rm1={rm1}
+                  />
+                ) : (
+                  <View style={styles.rmEmpty}>
+                    <Text style={styles.rmEmptyText}>
+                      Do a set &lt; 10 reps to estimate 1RM
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </ScrollView>
         </View>
 
         {/* Botones */}
@@ -308,6 +327,19 @@ const styles = StyleSheet.create({
   info: { marginTop: 16 },
   label: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
   value: { fontSize: 15, color: colors.text, marginTop: 2 },
+
+  /* Carrusel de charts */
+  carouselContent: {
+    // sin gap para evitar ver el otro chart; cada página ocupa SCREEN_W
+  },
+  page: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pageInner: {
+    width: '90%',               // margen lateral para que quede centrado con “aire”
+    alignSelf: 'center',
+  },
 
   rmEmpty: {
     backgroundColor: '#111318',
