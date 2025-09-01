@@ -13,52 +13,25 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
 import { supabase } from '@/lib/supabase';
-
-// Gráficas (repo: JesperLekland/react-native-svg-charts)
-import { LineChart, XAxis, YAxis, Grid } from 'react-native-svg-charts';
-import * as shape from 'd3-shape';
-import * as scale from 'd3-scale';
-import { Path } from 'react-native-svg';
+import ExerciseVolumeChart from '@/components/charts/ExerciseVolumeChart';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 type ExerciseRow = { id: string; name: string };
-type MetricRow = { created_at: string; kg_per_rep: number };
-
-function formatDayLabel(d: Date) {
-  // mmm-dd (o dd/mm)
-  return d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
-}
+type MetricRow = { created_at: string; volume: number };
 
 function groupDailyAverage(rows: MetricRow[]) {
-  // agrupa por YYYY-MM-DD y saca promedio de kg_per_rep
   const map: Record<string, { sum: number; n: number; date: Date }> = {};
   for (const r of rows) {
     const d = new Date(r.created_at);
     const ymd = d.toISOString().slice(0, 10);
     if (!map[ymd]) map[ymd] = { sum: 0, n: 0, date: new Date(d.getFullYear(), d.getMonth(), d.getDate()) };
-    map[ymd].sum += Number(r.kg_per_rep || 0);
+    map[ymd].sum += Number(r.volume || 0);
     map[ymd].n += 1;
   }
-  const arr = Object.values(map)
+  return Object.values(map)
     .map((v) => ({ date: v.date, value: v.n > 0 ? v.sum / v.n : 0 }))
     .sort((a, b) => +a.date - +b.date);
-  return arr;
-}
-
-function linearRegression(y: number[]) {
-  // x = 0..n-1
-  const n = y.length;
-  if (n === 0) return { m: 0, b: 0 };
-  const x = Array.from({ length: n }, (_, i) => i);
-  const sumX = x.reduce((a, b) => a + b, 0);
-  const sumY = y.reduce((a, b) => a + b, 0);
-  const sumXX = x.reduce((a, b) => a + b * b, 0);
-  const sumXY = x.reduce((a, b, i) => a + b * y[i], 0);
-  const denom = n * sumXX - sumX * sumX || 1;
-  const m = (n * sumXY - sumX * sumY) / denom;
-  const b = (sumY - m * sumX) / n;
-  return { m, b };
 }
 
 export default function Dashboard() {
@@ -68,7 +41,7 @@ export default function Dashboard() {
   const [dataPoints, setDataPoints] = useState<{ date: Date; value: number }[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Carga lista de ejercicios a partir de métricas del usuario
+  // Carga lista de ejercicios (a partir de métricas del usuario)
   useEffect(() => {
     (async () => {
       try {
@@ -81,8 +54,6 @@ export default function Dashboard() {
           setLoading(false);
           return;
         }
-
-        // Traemos métricas con join al ejercicio para deduplicar en cliente
         const { data: metrics, error } = await supabase
           .from('exercise_workout_metrics')
           .select('exercise_id, exercises(name)')
@@ -97,12 +68,10 @@ export default function Dashboard() {
             if (!map.has(row.exercise_id)) map.set(row.exercise_id, row.exercises.name as string);
           }
         }
-        // Si no hay métricas, intenta cargar ejercicios del usuario (o globales)
         if (map.size === 0) {
           const { data: ex, error: exErr } = await supabase
             .from('exercises')
             .select('id, name')
-            .or(`user_id.eq.${userId},user_id.is.null`)
             .limit(50);
           if (exErr || !ex) {
             setExercises([]);
@@ -126,7 +95,7 @@ export default function Dashboard() {
     })();
   }, []);
 
-  // Carga de series para el ejercicio elegido
+  // Carga serie para el elegido
   useEffect(() => {
     (async () => {
       try {
@@ -138,15 +107,13 @@ export default function Dashboard() {
 
         const { data, error } = await supabase
           .from('exercise_workout_metrics')
-          .select('created_at, kg_per_rep')
+          .select('created_at, volume')
           .eq('user_id', userId)
           .eq('exercise_id', selected.id)
           .order('created_at', { ascending: true });
 
         if (error) throw error;
-
-        const daily = groupDailyAverage((data ?? []) as MetricRow[]);
-        setDataPoints(daily);
+        setDataPoints(groupDailyAverage((data ?? []) as MetricRow[]));
       } catch (e) {
         console.error('Load metrics error', e);
         setDataPoints([]);
@@ -154,29 +121,12 @@ export default function Dashboard() {
     })();
   }, [selected?.id]);
 
-  const yValues = useMemo(() => dataPoints.map((p) => p.value), [dataPoints]);
-  const dates = useMemo(() => dataPoints.map((p) => p.date), [dataPoints]);
-
-  // Línea de tendencia sobre los yValues
-  const trend = useMemo(() => {
-    if (yValues.length === 0) return [];
-    if (yValues.length === 1) return [yValues[0], yValues[0]];
-    const { m, b } = linearRegression(yValues);
-    // valores predichos en x=0..n-1
-    return yValues.map((_, i) => m * i + b);
-  }, [yValues]);
-
-  const contentInset = { top: 20, bottom: 20 };
-  const chartWidth = SCREEN_W - 40; // padding lateral
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Progress</Text>
-
-          {/* Selector de ejercicio (abre modal) */}
           <TouchableOpacity
             style={styles.exerciseBtn}
             onPress={() => setPickerOpen(true)}
@@ -221,83 +171,20 @@ export default function Dashboard() {
           </View>
         </Modal>
 
-        {/* Bezier Line Chart + Trend line */}
+        {/* Chart reutilizando componente */}
         <Card variant="dark" style={styles.chartCard}>
-          <Text style={styles.chartTitle}>
-            {selected ? `${selected.name} • kg/rep` : 'Exercise • kg/rep'}
-          </Text>
-
-          {dataPoints.length === 0 ? (
-            <View style={[styles.chartEmpty, styles.center]}>
-              <Text style={styles.emptyText}>No data yet for this exercise</Text>
-            </View>
-          ) : (
-            <View style={{ paddingRight: 8 }}>
-              <View style={{ flexDirection: 'row', height: 220 }}>
-                {/* Y axis */}
-                <YAxis
-                  data={yValues}
-                  contentInset={contentInset}
-                  svg={{ fill: '#9CA3AF', fontSize: 10 }}
-                  numberOfTicks={6}
-                  formatLabel={(value: number) => `${Math.round(value)}`}
-                />
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  {/* Serie principal suavizada (bezier) */}
-                  <LineChart
-                    style={{ flex: 1 }}
-                    data={yValues}
-                    svg={{ stroke: '#10B981', strokeWidth: 3 }}
-                    contentInset={contentInset}
-                    curve={shape.curveNatural} // suavizado tipo "bezier"
-                  >
-                    <Grid svg={{ stroke: 'rgba(255,255,255,0.08)' }} />
-                  </LineChart>
-
-                  {/* Línea de tendencia superpuesta (misma escala) */}
-                  {trend.length >= 2 && (
-                    <LineChart
-                      style={StyleSheet.absoluteFill}
-                      data={trend}
-                      svg={{ stroke: '#60A5FA', strokeWidth: 2, strokeDasharray: [6, 6] }}
-                      contentInset={contentInset}
-                      curve={shape.curveLinear}
-                    />
-                  )}
-                </View>
-              </View>
-
-              {/* X axis: sólo días con entreno (sin días vacíos) */}
-              <XAxis
-                style={{ marginTop: 8, marginLeft: 28 }}
-                data={dates}
-                scale={scale.scaleTime}
-                formatLabel={(value: Date, index: number) => formatDayLabel(dates[index])}
-                svg={{ fill: '#9CA3AF', fontSize: 10 }}
-                contentInset={{ left: 10, right: 10 }}
-              />
-            </View>
-          )}
-
-          {/* Leyenda simple */}
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendSwatch, { backgroundColor: '#10B981' }]} />
-              <Text style={styles.legendText}>kg/rep (daily avg)</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendSwatch, { backgroundColor: '#60A5FA' }]} />
-              <Text style={styles.legendText}>Trend</Text>
-            </View>
-          </View>
+          <ExerciseVolumeChart
+            title={selected ? `${selected.name} • volume` : 'Exercise • volume'}
+            data={dataPoints}
+            height={220}
+          />
         </Card>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-/* ───────────── estilos ───────────── */
-
+/* estilos */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   content: { padding: 20, paddingBottom: 100 },
@@ -319,20 +206,6 @@ const styles = StyleSheet.create({
   exerciseBtnText: { color: '#D1D5DB', fontFamily: 'Inter-SemiBold' },
 
   chartCard: { padding: 16, marginTop: 8 },
-  chartTitle: { color: '#fff', fontSize: 16, fontFamily: 'Inter-SemiBold', marginBottom: 8 },
-
-  chartEmpty: { height: 220, backgroundColor: '#111318', borderRadius: 12 },
-  center: { alignItems: 'center', justifyContent: 'center' },
-
-  legendRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginTop: 12,
-  },
-  legendItem: { flexDirection: 'row', alignItems: 'center' },
-  legendSwatch: { width: 10, height: 10, borderRadius: 2, marginRight: 6 },
-  legendText: { color: '#9CA3AF', fontSize: 12 },
 
   // Modal
   modalOverlay: {

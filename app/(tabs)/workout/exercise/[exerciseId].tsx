@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -16,6 +17,33 @@ import { useExerciseStore } from '@/store/exerciseStore';
 import { useRoutineStore } from '@/store/routineStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import colors from '@/theme/colors';
+
+// Charts
+import ExerciseVolumeChart from '@/components/charts/ExerciseVolumeChart';
+import BrzyckiRMChart from '@/components/charts/BrzyckiRMChart';
+
+type MetricRow = { created_at: string; volume: number };
+
+/** Agrupa por día y saca promedio del volumen por sesión del mismo día (x-eje con días entrenados). */
+function groupDailyAverage(rows: MetricRow[]) {
+  const map: Record<string, { sum: number; n: number; date: Date }> = {};
+  for (const r of rows) {
+    const d = new Date(r.created_at);
+    const key = d.toISOString().slice(0, 10);
+    if (!map[key]) {
+      map[key] = {
+        sum: 0,
+        n: 0,
+        date: new Date(d.getFullYear(), d.getMonth(), d.getDate()),
+      };
+    }
+    map[key].sum += Number(r.volume || 0);
+    map[key].n += 1;
+  }
+  return Object.values(map)
+    .map((v) => ({ date: v.date, value: v.n ? v.sum / v.n : 0 }))
+    .sort((a, b) => +a.date - +b.date);
+}
 
 export default function ExerciseInfoScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
@@ -29,6 +57,10 @@ export default function ExerciseInfoScreen() {
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+
+  // charts data
+  const [volumePoints, setVolumePoints] = useState<{ date: Date; value: number }[]>([]);
+  const [rm1, setRm1] = useState<number | null>(null);
 
   /* ───── carga del ejercicio (caché → Supabase) ───── */
   useEffect(() => {
@@ -48,6 +80,81 @@ export default function ExerciseInfoScreen() {
       if (error) Alert.alert('Error', 'Could not load exercise.');
       setExercise(data as Exercise | null);
       setLoading(false);
+    })();
+  }, [exerciseId]);
+
+  /* ───── métricas para gráfico de volumen (línea) ───── */
+  useEffect(() => {
+    (async () => {
+      try {
+        setVolumePoints([]);
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid || !exerciseId) return;
+
+        const { data, error } = await supabase
+          .from('exercise_workout_metrics')
+          .select('created_at, volume')
+          .eq('user_id', uid)
+          .eq('exercise_id', exerciseId)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        setVolumePoints(groupDailyAverage((data ?? []) as MetricRow[]));
+      } catch (e) {
+        console.error('[exercise screen] metrics', e);
+        setVolumePoints([]);
+      }
+    })();
+  }, [exerciseId]);
+
+  /* ───── cálculo 1RM (Brzycki) de la última sesión con set <10 reps y mayor peso ───── */
+  useEffect(() => {
+    (async () => {
+      try {
+        setRm1(null);
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid || !exerciseId) return;
+
+        // 1) última session_exercises del user para este exercise
+        const { data: lastSE, error: seErr } = await supabase
+          .from('session_exercises')
+          .select('id')
+          .eq('user_id', uid)
+          .eq('exercise_id', exerciseId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (seErr || !lastSE?.id) return;
+
+        // 2) sets de esa session_exercise
+        const { data: sets, error: setsErr } = await supabase
+          .from('exercise_sets')
+          .select('weight, reps')
+          .eq('session_exercise_id', lastSE.id);
+
+        if (setsErr || !sets?.length) return;
+
+        const eligible = (sets as { weight: number; reps: number }[])
+          .filter((s) => Number(s.reps) > 0 && Number(s.reps) < 10)
+          .sort((a, b) => Number(b.weight) - Number(a.weight));
+
+        const pick = eligible[0] ?? null;
+        if (!pick) return;
+
+        const w = Number(pick.weight);
+        const r = Number(pick.reps);
+        const denom = 1.0278 - 0.0278 * r;
+        if (denom <= 0) return;
+
+        const oneRM = w / denom;
+        setRm1(oneRM);
+      } catch (e) {
+        console.error('[exercise screen] rm', e);
+        setRm1(null);
+      }
     })();
   }, [exerciseId]);
 
@@ -119,41 +226,68 @@ export default function ExerciseInfoScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
-          <ArrowLeft color={colors.primary} size={24} />
-        </Pressable>
-        <Text style={styles.headerTitle}>{exercise.name}</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
+        {/* Header simple con nombre */}
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => router.back()}>
+            <ArrowLeft color={colors.primary} size={24} />
+          </Pressable>
+          <Text style={styles.headerTitle}>{exercise.name}</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
-      {/* info */}
-      <View style={styles.info}>
-        <Text style={styles.label}>Muscle group:</Text>
-        <Text style={styles.value}>{exercise.muscle_group}</Text>
+        {/* Muscle group + Description */}
+        <View style={styles.info}>
+          <Text style={styles.label}>Muscle group:</Text>
+          <Text style={styles.value}>{exercise.muscle_group}</Text>
 
-        {!!exercise.description && (
-          <>
-            <Text style={[styles.label, { marginTop: 12 }]}>Description:</Text>
-            <Text style={styles.value}>{exercise.description}</Text>
-          </>
-        )}
-      </View>
+          {!!exercise.description && (
+            <>
+              <Text style={[styles.label, { marginTop: 12 }]}>Description:</Text>
+              <Text style={styles.value}>{exercise.description}</Text>
+            </>
+          )}
+        </View>
 
-      {/* actions */}
-      <View style={styles.actions}>
-        <Pressable style={styles.btn} onPress={handleAddToRoutine}>
-          <Text style={styles.btnTxt}>Add to Routine</Text>
-        </Pressable>
-        <Pressable
-          style={styles.btn}
-          onPress={handleAddToWorkout}
-          disabled={adding}
-        >
-          <Text style={styles.btnTxt}>Add to Workout</Text>
-        </Pressable>
-      </View>
+        {/* CHART 1: Volumen (línea Bezier) */}
+        <View style={{ marginTop: 16 }}>
+          <ExerciseVolumeChart
+            title={`${exercise.name} • volume`}
+            data={volumePoints}
+            height={220}
+          />
+        </View>
+
+        {/* CHART 2: 1RM Brzycki (barras) */}
+        <View style={{ marginTop: 16 }}>
+          {rm1 ? (
+            <BrzyckiRMChart
+              title={`${exercise.name} • RM (Brzycki's formula)`}
+              rm1={rm1}
+            />
+          ) : (
+            <View style={styles.rmEmpty}>
+              <Text style={styles.rmEmptyText}>
+                Do a set &lt; 10 reps to estimate 1RM
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Botones */}
+        <View style={styles.actions}>
+          <Pressable style={styles.btn} onPress={handleAddToRoutine}>
+            <Text style={styles.btnTxt}>Add to Routine</Text>
+          </Pressable>
+          <Pressable
+            style={styles.btn}
+            onPress={handleAddToWorkout}
+            disabled={adding}
+          >
+            <Text style={styles.btnTxt}>Add to Workout</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -162,18 +296,29 @@ export default function ExerciseInfoScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   container: { flex: 1, backgroundColor: '#000' },
-  header: {
+
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingTop: 12,
   },
   headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
-  info: { paddingHorizontal: 20, marginTop: 20 },
+
+  info: { marginTop: 16 },
   label: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
   value: { fontSize: 15, color: colors.text, marginTop: 2 },
-  actions: { marginTop: 32, paddingHorizontal: 20, gap: 12 },
+
+  rmEmpty: {
+    backgroundColor: '#111318',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  rmEmptyText: { color: '#9CA3AF' },
+
+  actions: { marginTop: 24, gap: 12 },
   btn: {
     backgroundColor: colors.primary,
     paddingVertical: 14,
