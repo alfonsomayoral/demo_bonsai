@@ -33,7 +33,7 @@ export default function BrzyckiRMChart({ title, rm1 }: Props) {
         data: weights,
         // Colores por barra: verde para todas menos la última (1 rep), que será roja
         colors: weights.map((_, i) =>
-          (opacity = 1) =>
+          (opacity = 0.1) =>
             i === lastIdx
               ? `rgba(239, 68, 68, ${opacity})` // rojo (tailwind red-500)
               : `rgba(16, 185, 129, ${opacity})` // verde (tailwind emerald-500)
@@ -93,8 +93,8 @@ export default function BrzyckiRMChart({ title, rm1 }: Props) {
 
 const styles = StyleSheet.create({
   card: { backgroundColor: '#191B1F', borderRadius: 12, padding: 16 },
-  title: { color: '#fff', fontSize: 16, fontWeight: '600', marginBottom: 8 },
+  title: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 8 },
   chartBox: { width: '100%' },
   chart: { borderRadius: 12 },
-  rmText: { marginTop: 10, color: '#D1D5DB', fontSize: 13, fontWeight: '600' },
+  rmText: { marginTop: 10, color: '#ef4444', fontSize: 16, fontWeight: '700' },
 });

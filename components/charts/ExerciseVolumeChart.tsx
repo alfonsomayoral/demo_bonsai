@@ -106,11 +106,11 @@ export default function ExerciseVolumeChart({
       <View style={styles.legendRow}>
         <View style={styles.legendItem}>
           <View style={[styles.legendSwatch, { backgroundColor: accentColor }]} />
-          <Text style={styles.legendText}>volume</Text>
+          <Text style={styles.legendText}>Volume</Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendSwatch, { backgroundColor: trendColor }]} />
-          <Text style={styles.legendText}>trend</Text>
+          <Text style={styles.legendText}>Trend</Text>
         </View>
       </View>
     </View>
@@ -119,7 +119,7 @@ export default function ExerciseVolumeChart({
 
 const styles = StyleSheet.create({
   card: { backgroundColor: '#191B1F', borderRadius: 12, padding: 16 },
-  title: { color: '#fff', fontSize: 16, fontWeight: '600', marginBottom: 8 },
+  title: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 8 },
   empty: { backgroundColor: '#111318', borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: '#9CA3AF' },
   legendRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 12 },
