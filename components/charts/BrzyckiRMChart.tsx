@@ -17,12 +17,12 @@ const to2Dec = (n: number) => Math.round(n * 100) / 100;
  * w@r = 1RM * (1.0278 - 0.0278*r)
  *
  * Mostramos barras para reps: 6,5,4,3,2,1 (de izquierda a derecha).
- * La barra de 1 rep (última) va en rojo.
+ * Ahora: todas moradas salvo la de 1 rep (1RM) que es verde.
  */
 export default function BrzyckiRMChart({ title, rm1 }: Props) {
   const reps = [6, 5, 4, 3, 2, 1];
   const weightsRaw = reps.map((r) => Math.max(0, rm1 * (1.0278 - 0.0278 * r)));
-  const weights = weightsRaw.map(to2Dec); // normalizamos a 2 decimales para graficar
+  const weights = weightsRaw.map(to2Dec); // 2 decimales para graficar
 
   const lastIdx = reps.length - 1; // índice de la barra de 1 rep
 
@@ -31,19 +31,18 @@ export default function BrzyckiRMChart({ title, rm1 }: Props) {
     datasets: [
       {
         data: weights,
-        // Colores por barra: verde para todas menos la última (1 rep), que será roja
-        colors: weights.map((_, i) =>
-          (opacity = 0.1) =>
-            i === lastIdx
-              ? `rgba(239, 68, 68, ${opacity})` // rojo (tailwind red-500)
-              : `rgba(16, 185, 129, ${opacity})` // verde (tailwind emerald-500)
+        // Colores por barra: morado para todas excepto la última (1 rep), que será verde
+        colors: weights.map((_, i) => (opacity = 0.1) =>
+          i === lastIdx
+            ? `rgba(34, 197, 94, ${opacity})`   // verde (tailwind green-500)
+            : `rgba(168, 85, 247, ${opacity})` // morado (tailwind purple-500)
         ),
       },
     ],
   };
 
   // ChartKit usa chartConfig.color para los textos (incluye valores sobre barras) ⇒ blanco.
-  // Los ejes/labels del eje X van en gris con labelColor.
+  // Los labels del eje X van en gris con labelColor.
   const chartConfig = {
     backgroundColor: '#191B1F',
     backgroundGradientFrom: '#191B1F',
@@ -52,7 +51,7 @@ export default function BrzyckiRMChart({ title, rm1 }: Props) {
     color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`, // valores sobre barras en blanco
     labelColor: (opacity = 1) => `rgba(156, 163, 175, ${opacity})`, // labels eje X en gris
     propsForLabels: { fontSize: 10 },
-    barPercentage: 0.8, // barras más anchas
+    barPercentage: 0.5, // barras más anchas
   };
 
   // Medimos el ancho disponible para evitar overflow
@@ -96,5 +95,5 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 8 },
   chartBox: { width: '100%' },
   chart: { borderRadius: 12 },
-  rmText: { marginTop: 10, color: '#10B981', fontSize: 16, fontWeight: '700' },
+  rmText: { marginTop: 10, color: '#22c55e', fontSize: 16, fontWeight: '700' }, // verde para acompañar el 1RM
 });
