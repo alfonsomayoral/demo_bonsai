@@ -8,6 +8,9 @@ import {
   Alert,
   ScrollView,
   Dimensions,
+  LayoutChangeEvent,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -218,6 +221,21 @@ export default function ExerciseInfoScreen() {
     router.replace(`/workout/exercise/session/${sessId}`);
   };
 
+  /* ───── layout para el carrusel + página activa (dots) ───── */
+  const [viewportW, setViewportW] = useState<number>(SCREEN_W);
+  const [page, setPage] = useState<number>(0);
+
+  const onPagerLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w && Math.abs(w - viewportW) > 1) setViewportW(w);
+  };
+
+  const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const x = e.nativeEvent.contentOffset.x || 0;
+    const p = Math.round(x / Math.max(1, viewportW));
+    if (p !== page) setPage(p);
+  };
+
   /* ───── render ───── */
   if (loading || !exercise) {
     return (
@@ -251,46 +269,58 @@ export default function ExerciseInfoScreen() {
             </>
           )}
         </View>
-
+        <View style={styles.info}>
+          <Text style={styles.label}>Analysis:</Text>
+        </View>
         {/* ───────── Charts en carrusel (una página por chart) ───────── */}
         <View style={{ marginTop: 16 }}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToAlignment="center"
-            contentContainerStyle={styles.carouselContent}
-          >
-            {/* Página 1: Volumen */}
-            <View style={[styles.page, { width: SCREEN_W }]}>
-              <View style={styles.pageInner}>
-                <ExerciseVolumeChart
-                  title={`${exercise.name} • volume`}
-                  data={volumePoints}
-                  height={220}
-                />
-              </View>
-            </View>
-
-            {/* Página 2: 1RM Brzycki */}
-            <View style={[styles.page, { width: SCREEN_W }]}>
-              <View style={styles.pageInner}>
-                {rm1 ? (
-                  <BrzyckiRMChart
-                    title={`${exercise.name} • RM (Brzycki's formula)`}
-                    rm1={rm1}
+          <View onLayout={onPagerLayout}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToAlignment="center"
+              onMomentumScrollEnd={onMomentumEnd}
+              // cada página ocupa exactamente el ancho visible
+              contentContainerStyle={{ width: viewportW * 2 }}
+            >
+              {/* Página 1: Volumen */}
+              <View style={[styles.page, { width: viewportW }]}>
+                <View style={styles.pageInner}>
+                  <ExerciseVolumeChart
+                    title={`${exercise.name} • volume`}
+                    data={volumePoints}
+                    height={220}
                   />
-                ) : (
-                  <View style={styles.rmEmpty}>
-                    <Text style={styles.rmEmptyText}>
-                      Do a set &lt; 10 reps to estimate 1RM
-                    </Text>
-                  </View>
-                )}
+                </View>
               </View>
-            </View>
-          </ScrollView>
+
+              {/* Página 2: 1RM Brzycki */}
+              <View style={[styles.page, { width: viewportW }]}>
+                <View style={styles.pageInner}>
+                  {rm1 ? (
+                    <BrzyckiRMChart
+                      title={`${exercise.name} • RM (Brzycki's formula)`}
+                      rm1={rm1}
+                    />
+                  ) : (
+                    <View style={styles.rmEmpty}>
+                      <Text style={styles.rmEmptyText}>
+                        Do a set &lt; 10 reps to estimate 1RM
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* Dots (indicador de página) */}
+          <View style={styles.dotsRow}>
+            <View style={[styles.dot, page === 0 ? styles.dotActive : styles.dotInactive]} />
+            <View style={[styles.dot, page === 1 ? styles.dotActive : styles.dotInactive]} />
+          </View>
         </View>
 
         {/* Botones */}
@@ -325,20 +355,35 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
 
   info: { marginTop: 16 },
-  label: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  label: { fontSize: 16, fontWeight: '700', color: colors.primary },
   value: { fontSize: 15, color: colors.text, marginTop: 2 },
 
   /* Carrusel de charts */
-  carouselContent: {
-    // sin gap para evitar ver el otro chart; cada página ocupa SCREEN_W
-  },
   page: {
     justifyContent: 'center',
     alignItems: 'center',
   },
   pageInner: {
-    width: '90%',               // margen lateral para que quede centrado con “aire”
+    width: '90%', // margen lateral para centrar con “aire”
     alignSelf: 'center',
+  },
+
+  dotsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  dotActive: {
+    backgroundColor: colors.primary,
+  },
+  dotInactive: {
+    backgroundColor: '#374151',
   },
 
   rmEmpty: {
