@@ -64,12 +64,12 @@ export default function ExerciseVolumeChart({
             <YAxis
               data={yValues}
               contentInset={contentInset}
-              svg={{ fill: '#9CA3AF', fontSize: 10 }}
+              svg={{ fill: '#9CA3AF', fontSize: 10, paddingRight: 1111 }}
               numberOfTicks={6}
               formatLabel={(value: number) => `${Math.round(value)}`}
             />
 
-            <View style={{ flex: 1, marginLeft: 8 }}>
+            <View style={{ flex: 1, marginLeft: 10 }}>
               <LineChart
                 style={{ flex: 1 }}
                 data={yValues}

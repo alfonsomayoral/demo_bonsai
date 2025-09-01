@@ -48,8 +48,8 @@ export default function BrzyckiRMChart({ title, rm1 }: Props) {
     backgroundGradientFrom: '#191B1F',
     backgroundGradientTo: '#191B1F',
     decimalPlaces: 2, // 2 decimales en eje Y y valores sobre barras
-    color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`, // valores sobre barras en blanco
-    labelColor: (opacity = 1) => `rgba(156, 163, 175, ${opacity})`, // labels eje X en gris
+    color: (opacity = 0.5) => `rgba(255, 255, 255, ${opacity})`, // valores sobre barras en blanco
+    labelColor: (opacity = 0.5) => `rgba(156, 163, 175, ${opacity})`, // labels eje X en gris
     propsForLabels: { fontSize: 10 },
     barPercentage: 0.5, // barras más anchas
   };
