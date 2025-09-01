@@ -289,7 +289,7 @@ export default function ExerciseInfoScreen() {
               <View style={[styles.page, { width: viewportW }]}>
                 <View style={styles.pageInner}>
                   <ExerciseVolumeChart
-                    title={`${exercise.name} • volume`}
+                    title={`${exercise.name} • Volume`}
                     data={volumePoints}
                     height={220}
                   />
