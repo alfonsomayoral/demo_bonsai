@@ -48,7 +48,6 @@ export default function ExerciseVolumeChart({
     return yValues.map((_, i) => m * i + b);
   }, [yValues]);
 
-  // ChartKit: labels + datasets (tendencia como segundo dataset)
   const chartData = useMemo(
     () => ({
       labels,
