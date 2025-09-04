@@ -122,21 +122,15 @@ export default function Dashboard() {
     })();
   }, [selected?.id]);
 
+  const buttonLabel = loading ? 'Loading…' : selected?.name ?? 'Select exercise';
+  const buttonDisabled = loading || exercises.length === 0;
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Header */}
+        {/* Header (ahora solo título) */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Progress</Text>
-          <TouchableOpacity
-            style={styles.exerciseBtn}
-            onPress={() => setPickerOpen(true)}
-            disabled={loading || exercises.length === 0}
-          >
-            <Text style={styles.exerciseBtnText}>
-              {loading ? 'Loading…' : selected?.name ?? 'Select exercise'}
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Modal selector */}
@@ -172,16 +166,19 @@ export default function Dashboard() {
           </View>
         </Modal>
 
-        {/* Chart reutilizando componente */}
+        {/* Chart reutilizando componente: botón ahora dentro del card */}
         <Card variant="dark" style={styles.chartCard}>
           <ExerciseVolumeChart
             title={selected ? `${selected.name} • volume` : 'Exercise • volume'}
             data={dataPoints}
             height={220}
+            actionLabel={buttonLabel}
+            onPressAction={() => setPickerOpen(true)}
+            actionDisabled={buttonDisabled}
           />
         </Card>
 
-        {/* NUEVO: Pie Chart por grupos musculares (últimos 30 días) */}
+        {/* Pie Chart por grupos musculares (últimos 30 días) */}
         <Card variant="dark" style={styles.chartCard}>
           <Text style={styles.cardTitle}>Muscle Focus (last 30 days)</Text>
           <MuscleGroupPieChart />
@@ -203,14 +200,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerTitle: { fontSize: 28, color: '#fff', fontFamily: 'Inter-Bold' },
-
-  exerciseBtn: {
-    backgroundColor: '#191B1F',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  exerciseBtnText: { color: '#D1D5DB', fontFamily: 'Inter-SemiBold' },
 
   chartCard: { padding: 16, marginTop: 8, backgroundColor: '#191B1F'  },
 

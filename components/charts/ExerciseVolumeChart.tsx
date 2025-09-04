@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, LayoutChangeEvent, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, LayoutChangeEvent, Dimensions, TouchableOpacity } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 
 type Point = { date: Date; value: number };
@@ -10,6 +10,11 @@ interface Props {
   height?: number;
   accentColor?: string;          // línea principal
   trendColor?: string;           // línea de tendencia
+
+  /** NUEVO: botón arriba a la derecha dentro del chart */
+  actionLabel?: string;
+  onPressAction?: () => void;
+  actionDisabled?: boolean;
 }
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -37,6 +42,9 @@ export default function ExerciseVolumeChart({
   height = 220,
   accentColor = '#10B981',       // verde
   trendColor = '#a855f7',        // morado
+  actionLabel = 'Select exercise',
+  onPressAction,
+  actionDisabled = false,
 }: Props) {
   const labels = useMemo(() => data.map(p => formatDay(p.date)), [data]);
   const yValues = useMemo(() => data.map(p => p.value), [data]);
@@ -91,7 +99,25 @@ export default function ExerciseVolumeChart({
 
   return (
     <View style={styles.card}>
-      {!!title && <Text style={styles.title}>{title}</Text>}
+      {/* Header interno del card: título + botón en la esquina superior derecha */}
+      {(title || onPressAction) && (
+        <View style={styles.headerRow}>
+          {!!title && <Text style={styles.title}>{title}</Text>}
+          {onPressAction && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Choose exercise"
+              onPress={onPressAction}
+              disabled={actionDisabled}
+              style={[styles.actionBtn, actionDisabled && styles.actionBtnDisabled]}
+            >
+              <Text style={styles.actionBtnText} numberOfLines={1}>
+                {actionLabel}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {data.length === 0 ? (
         <View style={[styles.empty, { height }]}>
@@ -115,7 +141,7 @@ export default function ExerciseVolumeChart({
               bezier
               yLabelsOffset={10}
               xLabelsOffset={-4}
-              style={styles.chart}   // ⟵ estilo ÚNICO (no array)
+              style={styles.chart}   // estilo ÚNICO (no array)
               segments={6}
               formatYLabel={(v: string) => `${Math.round(Number(v))}`}
             />
@@ -140,7 +166,30 @@ export default function ExerciseVolumeChart({
 
 const styles = StyleSheet.create({
   card: { backgroundColor: '#191B1F', borderRadius: 12, padding: 16 },
-  title: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 8 },
+
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    gap: 8,
+  },
+  title: { color: '#fff', fontSize: 16, fontWeight: '700', flexShrink: 1 },
+
+  actionBtn: {
+    backgroundColor: '#191B1F',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#2A2F36',
+    maxWidth: 200,
+  },
+  actionBtnDisabled: {
+    opacity: 0.6,
+  },
+  actionBtnText: { color: '#D1D5DB', fontWeight: '600' },
+
   empty: {
     backgroundColor: '#111318',
     borderRadius: 10,
@@ -151,7 +200,6 @@ const styles = StyleSheet.create({
 
   chartWrap: {
     width: '100%',
-    // sin padding para aprovechar más ancho (márgenes negativos aplicados aquí)
   },
   chart: {
     borderRadius: 12,
