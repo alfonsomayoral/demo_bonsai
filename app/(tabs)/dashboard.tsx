@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
 import { supabase } from '@/lib/supabase';
 import ExerciseVolumeChart from '@/components/charts/ExerciseVolumeChart';
+import MuscleGroupPieChart from '@/components/charts/MuscleGroupPieChart'; // ⟵ NUEVO
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -179,6 +180,12 @@ export default function Dashboard() {
             height={220}
           />
         </Card>
+
+        {/* NUEVO: Pie Chart por grupos musculares (últimos 30 días) */}
+        <Card variant="dark" style={styles.chartCard}>
+          <Text style={styles.cardTitle}>Muscle Focus (last 30 days)</Text>
+          <MuscleGroupPieChart />
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -205,7 +212,14 @@ const styles = StyleSheet.create({
   },
   exerciseBtnText: { color: '#D1D5DB', fontFamily: 'Inter-SemiBold' },
 
-  chartCard: { padding: 16, marginTop: 8 },
+  chartCard: { padding: 16, marginTop: 8, backgroundColor: '#191B1F'  },
+
+  cardTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    marginBottom: 8,
+  },
 
   // Modal
   modalOverlay: {
