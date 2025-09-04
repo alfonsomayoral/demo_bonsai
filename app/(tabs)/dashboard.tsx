@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,16 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
+  LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
 import { supabase } from '@/lib/supabase';
 import ExerciseVolumeChart from '@/components/charts/ExerciseVolumeChart';
-import MuscleGroupPieChart from '@/components/charts/MuscleGroupPieChart'; // ⟵ NUEVO
+import BrzyckiRMChart from '@/components/charts/BrzyckiRMChart';
+import MuscleGroupPieChart from '@/components/charts/MuscleGroupPieChart';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -41,6 +45,30 @@ export default function Dashboard() {
   const [selected, setSelected] = useState<ExerciseRow | null>(null);
   const [dataPoints, setDataPoints] = useState<{ date: Date; value: number }[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Pager state (idéntico estilo a [exerciseId])
+  const [viewportW, setViewportW] = useState<number>(SCREEN_W);
+  const [page, setPage] = useState<number>(0);
+  const pagerRef = useRef<ScrollView | null>(null);
+
+  const onPagerLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w && Math.abs(w - viewportW) > 1) setViewportW(w);
+  };
+  const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const x = e.nativeEvent.contentOffset.x || 0;
+    const p = Math.round(x / Math.max(1, viewportW));
+    if (p !== page) setPage(p);
+  };
+  const scrollToPage = (p: number) => {
+    setPage(p);
+    requestAnimationFrame(() => {
+      pagerRef.current?.scrollTo({ x: Math.max(0, p) * viewportW, y: 0, animated: true });
+    });
+  };
+
+  // 1RM del ejercicio seleccionado (para la segunda página)
+  const [rm1, setRm1] = useState<number | null>(null);
 
   // Carga lista de ejercicios (a partir de métricas del usuario)
   useEffect(() => {
@@ -96,7 +124,7 @@ export default function Dashboard() {
     })();
   }, []);
 
-  // Carga serie para el elegido
+  // Serie de volumen para el elegido (página 1)
   useEffect(() => {
     (async () => {
       try {
@@ -122,15 +150,126 @@ export default function Dashboard() {
     })();
   }, [selected?.id]);
 
+  // 1RM (Brzycki) del ejercicio elegido (página 2)
+  useEffect(() => {
+    (async () => {
+      try {
+        setRm1(null);
+        if (!selected) return;
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) return;
+
+        // 1) últimas session_exercises del user + ejercicio
+        const { data: sessions, error: seErr } = await supabase
+          .from('session_exercises')
+          .select('id, created_at')
+          .eq('user_id', uid)
+          .eq('exercise_id', selected.id)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (seErr || !sessions?.length) return;
+
+        const ids = sessions.map((s) => s.id);
+
+        // 2) última serie elegible (<10 reps, peso > 0), priorizando fecha y luego peso
+        const { data: sets, error: setErr } = await supabase
+          .from('exercise_sets')
+          .select('weight, reps, performed_at, created_at')
+          .in('session_exercise_id', ids)
+          .gt('reps', 0)
+          .lt('reps', 10)
+          .gt('weight', 0)
+          .order('performed_at', { ascending: false })
+          .order('created_at', { ascending: false })
+          .order('weight', { ascending: false })
+          .limit(1);
+        if (setErr || !sets?.length) return;
+
+        const top = sets[0];
+        const w = Number(top.weight);
+        const r = Number(top.reps);
+        const denom = 1.0278 - 0.0278 * r;
+        if (denom <= 0) return;
+        setRm1(w / denom);
+      } catch (e) {
+        console.error('[dashboard] rm1 calc', e);
+        setRm1(null);
+      }
+    })();
+  }, [selected?.id]);
+
   const buttonLabel = loading ? 'Loading…' : selected?.name ?? 'Select exercise';
   const buttonDisabled = loading || exercises.length === 0;
+
+  // Selección desde el modal → fija ejercicio y navega a página Brzycki
+  const handlePickExercise = (item: ExerciseRow) => {
+    setSelected(item);
+    setPickerOpen(false);
+    scrollToPage(1);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Header (ahora solo título) */}
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Progress</Text>
+        </View>
+
+        {/* Carrusel de charts (2 páginas), sin tocar bordes ni ver cards vecinos */}
+        <View style={{ marginTop: 8 }}>
+          <View onLayout={onPagerLayout}>
+            <ScrollView
+              ref={pagerRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToAlignment="center"
+              onMomentumScrollEnd={onMomentumEnd}
+              contentContainerStyle={{ width: viewportW * 2 }}
+            >
+              {/* Página 1: Volume */}
+              <View style={[styles.page, { width: viewportW }]}>
+                <View style={styles.pageInner}>
+                  <Card variant="dark" style={styles.chartCard}>
+                    <ExerciseVolumeChart
+                      title={selected ? `${selected.name} • volume` : 'Exercise • volume'}
+                      data={dataPoints}
+                      height={220}
+                      actionLabel={buttonLabel}
+                      onPressAction={() => setPickerOpen(true)}
+                      actionDisabled={buttonDisabled}
+                    />
+                  </Card>
+                </View>
+              </View>
+
+              {/* Página 2: BrzyckiRM del ejercicio seleccionado */}
+              <View style={[styles.page, { width: viewportW }]}>
+                <View style={styles.pageInner}>
+                  <Card variant="dark" style={styles.chartCard}>
+                    {rm1 ? (
+                      <BrzyckiRMChart
+                        title={selected ? `${selected.name} • RM (Brzycki)` : 'RM (Brzycki)'}
+                        rm1={rm1}
+                        actionLabel={buttonLabel}
+                        onPressAction={() => setPickerOpen(true)}
+                        actionDisabled={buttonDisabled}
+                      />
+                    ) : (
+                      <View style={styles.rmEmpty}>
+                        <Text style={styles.rmEmptyText}>
+                          Do a heavy set (&lt; 10 reps) to estimate 1RM
+                        </Text>
+                      </View>
+                    )}
+                  </Card>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
         </View>
 
         {/* Modal selector */}
@@ -147,10 +286,7 @@ export default function Dashboard() {
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={styles.modalItem}
-                      onPress={() => {
-                        setSelected(item);
-                        setPickerOpen(false);
-                      }}
+                      onPress={() => handlePickExercise(item)}
                     >
                       <Text style={styles.modalItemText}>{item.name}</Text>
                     </TouchableOpacity>
@@ -165,18 +301,6 @@ export default function Dashboard() {
             </View>
           </View>
         </Modal>
-
-        {/* Chart reutilizando componente: botón ahora dentro del card */}
-        <Card variant="dark" style={styles.chartCard}>
-          <ExerciseVolumeChart
-            title={selected ? `${selected.name} • volume` : 'Exercise • volume'}
-            data={dataPoints}
-            height={220}
-            actionLabel={buttonLabel}
-            onPressAction={() => setPickerOpen(true)}
-            actionDisabled={buttonDisabled}
-          />
-        </Card>
 
         {/* Pie Chart por grupos musculares (últimos 30 días) */}
         <Card variant="dark" style={styles.chartCard}>
@@ -196,19 +320,33 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
     justifyContent: 'space-between',
   },
   headerTitle: { fontSize: 28, color: '#fff', fontFamily: 'Inter-Bold' },
 
-  chartCard: { padding: 16, marginTop: 8, backgroundColor: '#191B1F'  },
+  // Páginas: mismo formato que [exerciseId]
+  page: { justifyContent: 'center', alignItems: 'center' },
+  pageInner: { width: '90%', alignSelf: 'center' }, // no tocar bordes & sin ver cards vecinos
+
+  chartCard: { padding: 16, backgroundColor: '#191B1F' },
 
   cardTitle: {
     color: '#fff',
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
     marginBottom: 8,
   },
+
+  // Placeholder RM
+  rmEmpty: {
+    backgroundColor: '#111318',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  rmEmptyText: { color: '#9CA3AF' },
 
   // Modal
   modalOverlay: {
