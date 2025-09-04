@@ -1,3 +1,4 @@
+/* store/setStore.ts */
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { create } from 'zustand';
@@ -18,6 +19,7 @@ interface SetState {
     rpe?: number | null,
   ) => Promise<void>;
   duplicateSet: (setId: string) => void;
+  toggleSetFailure: (setId: string) => Promise<void>; /* ⟵ NUEVO */
   getSetCountForExercise: (sessionExerciseId: string) => number;
 }
 
@@ -59,6 +61,7 @@ export const useSetStore = create<SetState>((set, get) => ({
       performed_at: now,
       created_at: now,
       volume: reps * weight,              // solo para la UI offline
+      failure: false,                     // ⟵ NUEVO por defecto
     };
 
     /* pinta inmediatamente */
@@ -77,6 +80,7 @@ export const useSetStore = create<SetState>((set, get) => ({
         rpe: local.rpe,
         performed_at: local.performed_at,
         created_at: local.created_at,
+        failure: local.failure,            // ⟵ NUEVO
         /* volume OMITIDO – columna generada */
       });
 
@@ -96,8 +100,44 @@ export const useSetStore = create<SetState>((set, get) => ({
       get().addSet(src.session_exercise_id, src.reps, src.weight, src.rpe);
   },
 
+  /* ────── marcar/ desmarcar fallo ────── */
+  async toggleSetFailure(setId) {
+    const current = get().sets.find((s) => s.id === setId);
+    if (!current) return;
+
+    const next = !current.failure;
+
+    /* pintar local al instante */
+    set((s) => ({
+      sets: s.sets.map((row) =>
+        row.id === setId ? { ...row, failure: next } : row
+      ),
+    }));
+
+    /* sincronizar si hay sesión */
+    if (
+      isSupabaseConfigured() &&
+      (await supabase.auth.getSession()).data.session
+    ) {
+      const { error } = await supabase
+        .from('exercise_sets')
+        .update({ failure: next })
+        .eq('id', setId);
+
+      if (error) {
+        console.error('[setStore] toggleSetFailure', error);
+        /* revertir si falla */
+        set((s) => ({
+          sets: s.sets.map((row) =>
+            row.id === setId ? { ...row, failure: !next } : row
+          ),
+        }));
+      }
+    }
+  },
+
   /* ────── helper ────── */
-  getSetCountForExercise(id) {
-    return get().sets.filter((s) => s.session_exercise_id === id).length;
+  getSetCountForExercise(sessionExerciseId) {
+    return get().sets.filter((s) => s.session_exercise_id === sessionExerciseId).length;
   },
 }));

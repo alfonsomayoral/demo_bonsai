@@ -114,9 +114,10 @@ export type Database = {
           created_at: string;
           volume: number | null;
           performed_at: string;
+          failure: boolean; /* ⟵ NUEVO */
         };
         Insert: Omit<Database['public']['Tables']['exercise_sets']['Row'], 'id' | 'created_at' | 'volume' | 'performed_at'> & {
-          created_at?: string; volume?: number | null; performed_at?: string
+          created_at?: string; volume?: number | null; performed_at?: string; failure?: boolean; /* ⟵ NUEVO opcional */
         };
         Update: Partial<Database['public']['Tables']['exercise_sets']['Row']>;
       };
