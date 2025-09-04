@@ -5,10 +5,10 @@ import { BarChart } from 'react-native-chart-kit';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 interface Props {
+  /** (Ignorado) El título siempre será "RM Prediction" */
   title?: string;
-  rm1: number; // 1RM calculado (kg)
+  rm1: number;
 
-  /** OPCIONAL: botón arriba a la derecha dentro del card, igual que en ExerciseVolumeChart */
   actionLabel?: string;
   onPressAction?: () => void;
   actionDisabled?: boolean;
@@ -16,20 +16,15 @@ interface Props {
 
 const to2Dec = (n: number) => Math.round(n * 100) / 100;
 
-/**
- * Brzycki:
- * 1RM = w / (1.0278 - 0.0278*r)
- * w@r = 1RM * (1.0278 - 0.0278*r)
- *
- * Barras para reps: 6,5,4,3,2,1. La de 1 rep (1RM) en verde.
- */
 export default function BrzyckiRMChart({
-  title,
+  // title, // ignorado
   rm1,
   actionLabel,
   onPressAction,
   actionDisabled,
 }: Props) {
+  const displayedTitle = 'RM Prediction';
+
   const reps = [6, 5, 4, 3, 2, 1];
   const weightsRaw = reps.map((r) => Math.max(0, rm1 * (1.0278 - 0.0278 * r)));
   const weights = weightsRaw.map(to2Dec);
@@ -41,9 +36,7 @@ export default function BrzyckiRMChart({
       {
         data: weights,
         colors: weights.map((_, i) => (opacity = 0.1) =>
-          i === lastIdx
-            ? `rgba(34, 197, 94, ${opacity})`
-            : `rgba(168, 85, 247, ${opacity})`
+          i === lastIdx ? `rgba(34, 197, 94, ${opacity})` : `rgba(168, 85, 247, ${opacity})`
         ),
       },
     ],
@@ -60,7 +53,6 @@ export default function BrzyckiRMChart({
     barPercentage: 0.5,
   };
 
-  // Medimos el ancho disponible para evitar overflow
   const [chartW, setChartW] = useState<number>(SCREEN_W - 40 - 32);
   const onLayoutWidth = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -69,25 +61,25 @@ export default function BrzyckiRMChart({
 
   return (
     <View style={styles.card}>
-      {(title || onPressAction) && (
-        <View style={styles.headerRow}>
-          {!!title && <Text style={styles.title}>{title}</Text>}
-          {onPressAction && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Choose exercise"
-              onPress={onPressAction}
-              disabled={actionDisabled}
-              style={[styles.actionBtn, actionDisabled && styles.actionBtnDisabled]}
-            >
-              <Text style={styles.actionBtnText} numberOfLines={1}>
-                {actionLabel ?? 'Select exercise'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      {/* Fila única: título (izq) + botón (der) */}
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>{displayedTitle}</Text>
+        {onPressAction && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Choose exercise"
+            onPress={onPressAction}
+            disabled={actionDisabled}
+            style={[styles.actionBtn, actionDisabled && styles.actionBtnDisabled]}
+          >
+            <Text style={styles.actionBtnText} numberOfLines={1}>
+              {actionLabel ?? 'Select exercise'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
+      {/* Chart */}
       <View style={styles.chartBox} onLayout={onLayoutWidth}>
         <BarChart
           style={styles.chart}
@@ -99,7 +91,6 @@ export default function BrzyckiRMChart({
           withInnerLines
           showValuesOnTopOfBars
           withCustomBarColorFromData
-          // ⚠️ NO usar flatColor para evitar conflicto con SVG nativo
           yAxisLabel=""
           yAxisSuffix=" kg"
         />
@@ -117,8 +108,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
     gap: 8,
+    marginBottom: 8,
   },
   title: { color: '#fff', fontSize: 16, fontWeight: '700', flexShrink: 1 },
 
@@ -128,12 +119,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#2A2F36',
-    maxWidth: 200,
+    borderColor: '#10B981',
+    maxWidth: 220,
   },
-  actionBtnDisabled: {
-    opacity: 0.6,
-  },
+  actionBtnDisabled: { opacity: 0.6 },
   actionBtnText: { color: '#D1D5DB', fontWeight: '700' },
 
   chartBox: { width: '100%' },
