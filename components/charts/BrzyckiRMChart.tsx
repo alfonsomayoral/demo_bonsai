@@ -16,46 +16,40 @@ const to2Dec = (n: number) => Math.round(n * 100) / 100;
  * 1RM = w / (1.0278 - 0.0278*r)
  * w@r = 1RM * (1.0278 - 0.0278*r)
  *
- * Mostramos barras para reps: 6,5,4,3,2,1 (de izquierda a derecha).
- * Ahora: todas moradas salvo la de 1 rep (1RM) que es verde.
+ * Barras para reps: 6,5,4,3,2,1. La de 1 rep (1RM) en verde.
  */
 export default function BrzyckiRMChart({ title, rm1 }: Props) {
   const reps = [6, 5, 4, 3, 2, 1];
   const weightsRaw = reps.map((r) => Math.max(0, rm1 * (1.0278 - 0.0278 * r)));
-  const weights = weightsRaw.map(to2Dec); // 2 decimales para graficar
-
-  const lastIdx = reps.length - 1; // índice de la barra de 1 rep
+  const weights = weightsRaw.map(to2Dec);
+  const lastIdx = reps.length - 1;
 
   const data = {
-    labels: reps.map(String), // ['6','5','4','3','2','1']
+    labels: reps.map(String),
     datasets: [
       {
         data: weights,
-        // Colores por barra: morado para todas excepto la última (1 rep), que será verde
         colors: weights.map((_, i) => (opacity = 0.1) =>
           i === lastIdx
-            ? `rgba(34, 197, 94, ${opacity})`   // verde (tailwind green-500)
-            : `rgba(168, 85, 247, ${opacity})` // morado (tailwind purple-500)
+            ? `rgba(34, 197, 94, ${opacity})`
+            : `rgba(168, 85, 247, ${opacity})`
         ),
       },
     ],
   };
 
-  // ChartKit usa chartConfig.color para los textos (incluye valores sobre barras) ⇒ blanco.
-  // Los labels del eje X van en gris con labelColor.
   const chartConfig = {
     backgroundColor: '#191B1F',
     backgroundGradientFrom: '#191B1F',
     backgroundGradientTo: '#191B1F',
-    decimalPlaces: 2, // 2 decimales en eje Y y valores sobre barras
-    color: (opacity = 0.5) => `rgba(255, 255, 255, ${opacity})`, // valores sobre barras en blanco
-    labelColor: (opacity = 0.5) => `rgba(156, 163, 175, ${opacity})`, // labels eje X en gris
+    decimalPlaces: 2,
+    color: (opacity = 0.5) => `rgba(255, 255, 255, ${opacity})`,
+    labelColor: (opacity = 0.5) => `rgba(156, 163, 175, ${opacity})`,
     propsForLabels: { fontSize: 10 },
-    barPercentage: 0.5, // barras más anchas
+    barPercentage: 0.5,
   };
 
-  // Medimos el ancho disponible para evitar overflow
-  const [chartW, setChartW] = useState<number>(SCREEN_W - 40 - 32); // fallback (screen - margen - padding card)
+  const [chartW, setChartW] = useState<number>(SCREEN_W - 40 - 32);
   const onLayoutWidth = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
     if (w && Math.abs(w - chartW) > 1) setChartW(w);
@@ -64,8 +58,6 @@ export default function BrzyckiRMChart({ title, rm1 }: Props) {
   return (
     <View style={styles.card}>
       {!!title && <Text style={styles.title}>{title}</Text>}
-
-      {/* wrapper que mide el ancho disponible */}
       <View style={styles.chartBox} onLayout={onLayoutWidth}>
         <BarChart
           style={styles.chart}
@@ -77,14 +69,10 @@ export default function BrzyckiRMChart({ title, rm1 }: Props) {
           withInnerLines
           showValuesOnTopOfBars
           withCustomBarColorFromData
-          flatColor
-          // Algunas definiciones de tipos marcan yAxisLabel como requerido:
           yAxisLabel=""
           yAxisSuffix=" kg"
         />
       </View>
-
-      {/* Único texto debajo del chart */}
       <Text style={styles.rmText}>1RM: {to2Dec(rm1)} kg</Text>
     </View>
   );
@@ -95,5 +83,5 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 8 },
   chartBox: { width: '100%' },
   chart: { borderRadius: 12 },
-  rmText: { marginTop: 10, color: '#22c55e', fontSize: 16, fontWeight: '700' }, // verde para acompañar el 1RM
+  rmText: { marginTop: 10, color: '#22c55e', fontSize: 16, fontWeight: '700' },
 });

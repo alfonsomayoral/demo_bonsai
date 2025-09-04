@@ -1,35 +1,25 @@
-// components/charts/MuscleGroupPieChart.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { PieChart } from 'react-native-svg-charts';
-import colors from '@/theme/colors';
+import Svg, { G, Path } from 'react-native-svg';
 import { supabase } from '@/lib/supabase';
+import colors from '@/theme/colors';
 
-type CountRowDb = {
-  workout_session_id: string;
-  created_at: string;
-  // en tu build puede venir como objeto, array o null
-  exercises: { muscle_group: string } | { muscle_group: string }[] | null;
-};
-
-type Slice = {
-  key: string;
-  value: number;
-  color: string;
-  label: string;
-  percent: number;
-};
+type Slice = { key: string; label: string; value: number; pct: number; color: string };
 
 const PALETTE = [
   '#0EA5E9', '#22C55E', '#F59E0B', '#EF4444', '#A855F7',
-  '#14B8A6', '#E11D48', '#7C3AED', '#10B981', '#F97316',
+  '#14B8A6', '#7C3AED', '#10B981', '#F97316', '#E11D48',
 ];
 
-function colorForIndex(i: number) {
-  return PALETTE[i % PALETTE.length];
+function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
+  const rad = (angleDeg - 90) * (Math.PI / 180);
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
-function shortLabel(name: string) {
-  return name || 'Unknown';
+function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
+  const start = polarToCartesian(cx, cy, r, endAngle);
+  const end = polarToCartesian(cx, cy, r, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`;
 }
 
 export default function MuscleGroupPieChart() {
@@ -39,11 +29,11 @@ export default function MuscleGroupPieChart() {
   useEffect(() => {
     (async () => {
       try {
-        const { data: userRes } = await supabase.auth.getUser();
-        const userId = userRes?.user?.id;
-        if (!userId) {
+        setLoading(true);
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) {
           setSlices([]);
-          setLoading(false);
           return;
         }
 
@@ -51,52 +41,42 @@ export default function MuscleGroupPieChart() {
         since.setDate(since.getDate() - 30);
         const sinceIso = since.toISOString();
 
+        // Contamos cuántas veces aparece cada grupo muscular en las session_exercises de los últimos 30 días
         const { data, error } = await supabase
-          .from('exercise_workout_metrics')
-          .select('workout_session_id, created_at, exercises(muscle_group)')
-          .eq('user_id', userId)
-          .gte('created_at', sinceIso);
+          .from('session_exercises')
+          .select('id, created_at, exercises(muscle_group)')
+          .eq('user_id', uid)
+          .gte('created_at', sinceIso)
+          .order('created_at', { ascending: true });
 
         if (error) throw error;
 
-        const rows = (data ?? []) as CountRowDb[];
-
-        // Contar (sesión, grupo muscular) únicos
-        const uniquePairs = new Set<string>();
-        for (const r of rows) {
-          const rel = r.exercises;
-          // normaliza: puede ser objeto, array o null
-          const mg =
-            Array.isArray(rel) ? rel[0]?.muscle_group :
-            rel?.muscle_group;
-
-          const muscle = (mg ?? 'Unknown').trim();
-          if (!r.workout_session_id) continue;
-
-          uniquePairs.add(`${r.workout_session_id}__${muscle}`);
+        const counts = new Map<string, number>();
+        for (const row of (data ?? []) as any[]) {
+          const mg = Array.isArray(row.exercises)
+            ? (row.exercises[0]?.muscle_group ?? 'Other')
+            : (row.exercises?.muscle_group ?? 'Other');
+          const key = String((mg || 'Other').trim());
+          counts.set(key, (counts.get(key) ?? 0) + 1);
         }
 
-        const counts: Record<string, number> = {};
-        for (const pair of uniquePairs) {
-          const muscle = pair.split('__')[1];
-          counts[muscle] = (counts[muscle] || 0) + 1;
+        const total = Array.from(counts.values()).reduce((a, b) => a + b, 0);
+        if (total === 0) {
+          setSlices([]);
+          return;
         }
 
-        const total = Object.values(counts).reduce((a, b) => a + b, 0);
-        const entries = Object.entries(counts)
-          .map(([group, count], idx) => {
-            const pct = total > 0 ? (count / total) * 100 : 0;
-            return {
-              key: group,
-              value: count,
-              color: colorForIndex(idx),
-              label: shortLabel(group),
-              percent: parseFloat(pct.toFixed(2)),
-            } as Slice;
-          })
-          .sort((a, b) => b.percent - a.percent);
+        const result = Array.from(counts.entries())
+          .map(([label, value], i) => ({
+            key: `${label}-${i}`,
+            label,
+            value,
+            pct: (value / total) * 100,
+            color: PALETTE[i % PALETTE.length],
+          }))
+          .sort((a, b) => b.value - a.value);
 
-        setSlices(entries);
+        setSlices(result);
       } catch (e) {
         console.error('[MuscleGroupPieChart] load error', e);
         setSlices([]);
@@ -106,52 +86,53 @@ export default function MuscleGroupPieChart() {
     })();
   }, []);
 
-  const pieData = useMemo(
-    () =>
-      slices.map((s) => ({
-        key: s.key,
-        value: s.value,
-        svg: { fill: s.color },
-      })),
-    [slices]
-  );
+  const arcs = useMemo(() => {
+    const out: { d: string; fill: string }[] = [];
+    if (slices.length === 0) return out;
+
+    const cx = 70, cy = 70, r = 60;
+    const total = slices.reduce((acc, s) => acc + s.value, 0);
+    let angle = 0;
+
+    for (const s of slices) {
+      const start = angle;
+      const end = angle + (360 * s.value) / Math.max(1, total);
+      out.push({ d: describeArc(cx, cy, r, start, end), fill: s.color });
+      angle = end;
+    }
+    return out;
+  }, [slices]);
+
+  if (loading) return <Text style={styles.info}>Loading…</Text>;
+  if (slices.length === 0) return <Text style={styles.info}>No data in last 30 days</Text>;
 
   return (
-    <View style={styles.container}>
-      {loading ? (
-        <Text style={styles.empty}>Loading…</Text>
-      ) : slices.length === 0 ? (
-        <Text style={styles.empty}>No data in last 30 days</Text>
-      ) : (
-        <View style={styles.row}>
-          <View style={styles.chartWrap}>
-            <PieChart style={styles.chart} data={pieData} />
-          </View>
+    <View style={styles.row}>
+      <Svg width={140} height={140}>
+        <G>
+          {arcs.map((a, i) => <Path key={`arc-${i}`} d={a.d} fill={a.fill} />)}
+        </G>
+      </Svg>
 
-          <View style={styles.legend}>
-            {slices.map((s) => (
-              <View key={s.key} style={styles.legendRow}>
-                <View style={[styles.dot, { backgroundColor: s.color }]} />
-                <Text style={styles.legendText}>
-                  {s.label} — {s.percent.toFixed(2)}%
-                </Text>
-              </View>
-            ))}
+      <View style={styles.legend}>
+        {slices.map((s) => (
+          <View key={s.key} style={styles.legendItem}>
+            <View style={[styles.dot, { backgroundColor: s.color }]} />
+            <Text style={styles.legendText}>
+              {s.label} — {s.pct.toFixed(2)}%
+            </Text>
           </View>
-        </View>
-      )}
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { width: '100%', },
   row: { flexDirection: 'row', alignItems: 'center' },
-  chartWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  chart: { height: 220, width: 220 },
-  legend: { flex: 1, paddingLeft: 12 },
-  legendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  legend: { marginLeft: 16, gap: 6, flexShrink: 1 },
+  legendItem: { flexDirection: 'row', alignItems: 'center' },
   dot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
   legendText: { color: colors.text, fontSize: 13 },
-  empty: { color: '#9CA3AF', fontSize: 13, textAlign: 'center', paddingVertical: 8 },
+  info: { color: '#9CA3AF', fontSize: 13, textAlign: 'center', paddingVertical: 8 },
 });
