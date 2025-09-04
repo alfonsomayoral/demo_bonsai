@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     gap: 8,
   },
-  title: { color: '#fff', fontSize: 16, fontWeight: '700', flexShrink: 1 },
+  title: { color: '#fff', fontSize: 18, fontWeight: '700', flexShrink: 1 },
 
   actionBtn: {
     backgroundColor: '#191B1F',
@@ -182,13 +182,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#2A2F36',
+    borderColor: '#10B981',
     maxWidth: 200,
   },
   actionBtnDisabled: {
     opacity: 0.6,
   },
-  actionBtnText: { color: '#D1D5DB', fontWeight: '600' },
+  actionBtnText: { color: '#D1D5DB', fontWeight: '700' },
 
   empty: {
     backgroundColor: '#111318',

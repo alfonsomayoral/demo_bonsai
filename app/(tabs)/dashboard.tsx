@@ -205,8 +205,8 @@ const styles = StyleSheet.create({
 
   cardTitle: {
     color: '#fff',
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
     marginBottom: 8,
   },
 
