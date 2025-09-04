@@ -18,7 +18,7 @@ export function WorkoutSummaryCard({ exercise }: { exercise: SummaryExercise }) 
         </View>
         <View style={styles.stat}>
           <Text style={styles.value2}>{exercise.reps}</Text>
-          <Text style={styles.label}>avg reps</Text>
+          <Text style={styles.label}>total reps</Text>
         </View>
         <View style={styles.stat}>
           <Text style={styles.value3}>{avgVol} kg</Text>
