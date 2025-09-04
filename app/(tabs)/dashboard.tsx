@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import ExerciseVolumeChart from '@/components/charts/ExerciseVolumeChart';
 import BrzyckiRMChart from '@/components/charts/BrzyckiRMChart';
 import MuscleGroupPieChart from '@/components/charts/MuscleGroupPieChart';
+import TopRMImprovementChart from '@/components/charts/TopRMImprovementChart';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -46,7 +47,7 @@ export default function Dashboard() {
   const [dataPoints, setDataPoints] = useState<{ date: Date; value: number }[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Pager state (idéntico estilo a [exerciseId])
+  // Pager (igual patrón que [exerciseId]), ahora con 3 páginas
   const [viewportW, setViewportW] = useState<number>(SCREEN_W);
   const [page, setPage] = useState<number>(0);
   const pagerRef = useRef<ScrollView | null>(null);
@@ -70,7 +71,7 @@ export default function Dashboard() {
   // 1RM del ejercicio seleccionado (para la segunda página)
   const [rm1, setRm1] = useState<number | null>(null);
 
-  // Carga lista de ejercicios (a partir de métricas del usuario)
+  // Carga lista de ejercicios
   useEffect(() => {
     (async () => {
       try {
@@ -124,7 +125,7 @@ export default function Dashboard() {
     })();
   }, []);
 
-  // Serie de volumen para el elegido (página 1)
+  // Serie de volumen (página 1)
   useEffect(() => {
     (async () => {
       try {
@@ -150,7 +151,7 @@ export default function Dashboard() {
     })();
   }, [selected?.id]);
 
-  // 1RM (Brzycki) del ejercicio elegido (página 2)
+  // 1RM (Brzycki) (página 2)
   useEffect(() => {
     (async () => {
       try {
@@ -160,7 +161,6 @@ export default function Dashboard() {
         const uid = auth.user?.id;
         if (!uid) return;
 
-        // 1) últimas session_exercises del user + ejercicio
         const { data: sessions, error: seErr } = await supabase
           .from('session_exercises')
           .select('id, created_at')
@@ -172,7 +172,6 @@ export default function Dashboard() {
 
         const ids = sessions.map((s) => s.id);
 
-        // 2) última serie elegible (<10 reps, peso > 0), priorizando fecha y luego peso
         const { data: sets, error: setErr } = await supabase
           .from('exercise_sets')
           .select('weight, reps, performed_at, created_at')
@@ -217,7 +216,7 @@ export default function Dashboard() {
           <Text style={styles.headerTitle}>Progress</Text>
         </View>
 
-        {/* Carrusel de charts (2 páginas), sin tocar bordes ni ver cards vecinos */}
+        {/* Carrusel de charts (3 páginas) */}
         <View style={{ marginTop: 8 }}>
           <View onLayout={onPagerLayout}>
             <ScrollView
@@ -228,14 +227,14 @@ export default function Dashboard() {
               decelerationRate="fast"
               snapToAlignment="center"
               onMomentumScrollEnd={onMomentumEnd}
-              contentContainerStyle={{ width: viewportW * 2 }}
+              contentContainerStyle={{ width: viewportW * 3 }}
             >
-              {/* Página 1: Volume */}
+              {/* Página 1: Volume Progress */}
               <View style={[styles.page, { width: viewportW }]}>
                 <View style={styles.pageInner}>
                   <Card variant="dark" style={styles.chartCard}>
                     <ExerciseVolumeChart
-                      title={selected ? `${selected.name} • volume` : 'Exercise • volume'}
+                      // título fijo interno: "Volume Progress"
                       data={dataPoints}
                       height={220}
                       actionLabel={buttonLabel}
@@ -246,13 +245,13 @@ export default function Dashboard() {
                 </View>
               </View>
 
-              {/* Página 2: BrzyckiRM del ejercicio seleccionado */}
+              {/* Página 2: RM Prediction (Brzycki) */}
               <View style={[styles.page, { width: viewportW }]}>
                 <View style={styles.pageInner}>
                   <Card variant="dark" style={styles.chartCard}>
                     {rm1 ? (
                       <BrzyckiRMChart
-                        title={selected ? `${selected.name} • RM (Brzycki)` : 'RM (Brzycki)'}
+                        // título fijo interno: "RM Prediction"
                         rm1={rm1}
                         actionLabel={buttonLabel}
                         onPressAction={() => setPickerOpen(true)}
@@ -265,6 +264,16 @@ export default function Dashboard() {
                         </Text>
                       </View>
                     )}
+                  </Card>
+                </View>
+              </View>
+
+              {/* Página 3: Top % 1RM (30d) */}
+              <View style={[styles.page, { width: viewportW }]}>
+                <View style={styles.pageInner}>
+                  <Card variant="dark" style={styles.chartCard}>
+                    <Text style={styles.cardTitle}>Top % 1RM (30d)</Text>
+                    <TopRMImprovementChart />
                   </Card>
                 </View>
               </View>
@@ -327,7 +336,7 @@ const styles = StyleSheet.create({
 
   // Páginas: mismo formato que [exerciseId]
   page: { justifyContent: 'center', alignItems: 'center' },
-  pageInner: { width: '90%', alignSelf: 'center' }, // no tocar bordes & sin ver cards vecinos
+  pageInner: { width: '90%', alignSelf: 'center' }, // sin tocar bordes ni ver cards vecinos
 
   chartCard: { padding: 16, backgroundColor: '#191B1F' },
 

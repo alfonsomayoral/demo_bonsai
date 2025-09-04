@@ -1,34 +1,72 @@
+// components/charts/TopRMImprovementChart.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { BarChart, Grid, XAxis } from 'react-native-svg-charts';
 import { Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
 import { supabase } from '@/lib/supabase';
 
-type SetRow = { id: string; weight: number; reps: number; created_at?: string | null; performed_at?: string | null; };
+type SetRow = {
+  id: string;
+  weight: number;
+  reps: number;
+  created_at?: string | null;
+  performed_at?: string | null;
+};
 type SessionExerciseRow = {
-  id: string; exercise_id: string; created_at: string;
+  id: string;
+  exercise_id: string;
+  created_at: string;
   exercises: { name: string } | { name: string }[] | null;
   exercise_sets: SetRow[] | null;
 };
-type SeriePoint = { date: number; e1rm: number };
-type ExerciseSeries = { exerciseId: string; name: string; points: SeriePoint[]; };
-type TopEntry = { exerciseId: string; name: string; baseline: number; current: number; improvementPct: number; };
+type TopEntry = {
+  exerciseId: string;
+  name: string;
+  baseline: number;
+  current: number;
+  improvementPct: number;
+};
 
-const PALETTE = ['#0EA5E9','#22C55E','#F59E0B','#EF4444','#A855F7','#14B8A6','#E11D48','#7C3AED','#10B981','#F97316'];
+const PALETTE = [
+  '#0EA5E9', '#22C55E', '#F59E0B', '#EF4444', '#A855F7',
+  '#14B8A6', '#E11D48', '#7C3AED', '#10B981', '#F97316',
+];
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 const isFiniteNum = (n: unknown) => typeof n === 'number' && Number.isFinite(n);
-function e1rmBrzycki(weight: number, reps: number): number { const r = clamp(Math.round(reps), 1, 12); return (weight * 36) / (37 - r); }
-function median(nums: number[]): number { const arr = nums.slice().sort((a, b) => a - b); const m = Math.floor(arr.length / 2); return arr.length % 2 ? arr[m] : (arr[m - 1] + arr[m]) / 2; }
-function shortName(name: string) { return name.length <= 14 ? name : name.slice(0, 12).trim() + '…'; }
 
-function bestHeavyLowRepSet(sets: SetRow[] | null | undefined): SetRow | null {
-  if (!sets || sets.length === 0) return null;
-  const cand = sets.filter(s => isFiniteNum(s.weight) && isFiniteNum(s.reps) && s.weight! >= 0);
+/** e1RM (Brzycki), limitamos reps al rango 1–12 */
+function e1rmBrzycki(weight: number, reps: number): number {
+  const r = clamp(Math.round(reps), 1, 12);
+  return (weight * 36) / (37 - r);
+}
+function shortName(name: string) {
+  return name.length <= 14 ? name : name.slice(0, 12).trim() + '…';
+}
+
+/** Mejor set pesado de un día: mayor peso y, a igualdad, menor reps; reps 1–9, peso > 0 */
+function bestSetPerDay(sets: SetRow[]): SetRow | null {
+  const cand = sets.filter(
+    s => isFiniteNum(s.weight) && isFiniteNum(s.reps) && Number(s.weight) > 0 && Number(s.reps) >= 1 && Number(s.reps) <= 9
+  );
   if (cand.length === 0) return null;
   cand.sort((a, b) => (b.weight !== a.weight ? b.weight - a.weight : a.reps - b.reps));
   return cand[0] ?? null;
 }
 
+/** Agrupa sets por día (YYYY-MM-DD) */
+function groupSetsByDay(rows: { ts: number; set: SetRow }[]) {
+  const map = new Map<string, SetRow[]>();
+  for (const { ts, set } of rows) {
+    const d = new Date(ts);
+    const ymd = d.toISOString().slice(0, 10);
+    if (!map.has(ymd)) map.set(ymd, []);
+    map.get(ymd)!.push(set);
+  }
+  return map;
+}
+
+/** Defs de gradientes por barra */
 function Gradients({ ids, baseColors }: { ids: string[]; baseColors: string[] }) {
   return (
     <Defs>
@@ -42,20 +80,23 @@ function Gradients({ ids, baseColors }: { ids: string[]; baseColors: string[] })
   );
 }
 
-function Labels({
-  x, y, bandwidth, data,
-}: {
-  x: (index: number) => number;
-  y: (value: number) => number;
-  bandwidth: number;
-  data: { value: number }[];
+/** Etiquetas sobre barras: props OPCIONALES (las inyecta BarChart en runtime) */
+function Labels(props: {
+  x?: (index: number) => number;
+  y?: (value: number) => number;
+  bandwidth?: number;
+  data?: Array<{ value?: number }>;
 }) {
+  const { x, y, bandwidth, data } = props;
+  if (!x || !y || !bandwidth || !data) return null;
+
   return (
     <>
       {data.map((d, i) => {
-        const pct = `${d.value >= 0 ? '+' : ''}${d.value.toFixed(1)}%`;
+        const val = Number(d?.value ?? 0);
+        const pct = `${val >= 0 ? '+' : ''}${val.toFixed(1)}%`;
         const cx = x(i) + bandwidth / 2;
-        const cy = y(Math.max(d.value, 0)) - 6;
+        const cy = y(Math.max(val, 0)) - 6;
         return (
           <SvgText
             key={`lbl-${i}`}
@@ -83,57 +124,90 @@ export default function TopRMImprovementChart() {
       try {
         const { data: userRes } = await supabase.auth.getUser();
         const userId = userRes?.user?.id;
-        if (!userId) { setTop([]); setLoading(false); return; }
+        if (!userId) {
+          setTop([]);
+          setLoading(false);
+          return;
+        }
 
-        const since = new Date(); since.setDate(since.getDate() - 30);
+        const since = new Date();
+        since.setDate(since.getDate() - 30);
         const sinceIso = since.toISOString();
 
+        // Traemos sesiones con sets y nombre del ejercicio en los últimos 30 días
         const { data, error } = await supabase
           .from('session_exercises')
-          .select('id, exercise_id, created_at, exercises(name), exercise_sets(id, weight, reps, performed_at, created_at)')
+          .select(
+            'id, exercise_id, created_at, exercises(name), exercise_sets(id, weight, reps, performed_at, created_at)'
+          )
           .eq('user_id', userId)
           .gte('created_at', sinceIso)
           .order('created_at', { ascending: true });
-        if (error) throw error;
 
+        if (error) throw error;
         const rows = (data ?? []) as SessionExerciseRow[];
-        const byExercise = new Map<string, ExerciseSeries>();
+
+        // Recolectamos sets válidos por ejercicio con su timestamp
+        type ByExercise = Map<string, { name: string; items: { ts: number; set: SetRow }[] }>;
+        const byExercise: ByExercise = new Map();
 
         for (const r of rows) {
-          const name = Array.isArray(r.exercises) ? (r.exercises[0]?.name ?? 'Unknown') : (r.exercises?.name ?? 'Unknown');
-          const best = bestHeavyLowRepSet(r.exercise_sets);
-          if (!best) continue;
+          const name = Array.isArray(r.exercises)
+            ? r.exercises[0]?.name ?? 'Unknown'
+            : r.exercises?.name ?? 'Unknown';
 
-          const dateStr = best.performed_at || best.created_at || r.created_at;
-          const ts = new Date(dateStr ?? r.created_at).getTime();
-          if (!Number.isFinite(ts)) continue;
+          for (const s of (r.exercise_sets ?? [])) {
+            const dateStr = s.performed_at || s.created_at || r.created_at;
+            const ts = new Date(dateStr ?? r.created_at).getTime();
+            if (!Number.isFinite(ts)) continue;
 
-          const e1rm = e1rmBrzycki(Number(best.weight), Number(best.reps));
-          if (!isFiniteNum(e1rm)) continue;
+            const reps = Number(s.reps);
+            const weight = Number(s.weight);
+            if (!(weight > 0 && reps >= 1 && reps <= 9)) continue; // < 10 reps
 
-          if (!byExercise.has(r.exercise_id)) byExercise.set(r.exercise_id, { exerciseId: r.exercise_id, name, points: [] });
-          byExercise.get(r.exercise_id)!.points.push({ date: ts, e1rm });
+            if (!byExercise.has(r.exercise_id)) byExercise.set(r.exercise_id, { name, items: [] });
+            byExercise.get(r.exercise_id)!.items.push({ ts, set: s });
+          }
         }
 
         const entries: TopEntry[] = [];
-        for (const { exerciseId, name, points } of byExercise.values()) {
-          if (points.length < 3) continue;
-          const ordered = points.slice().sort((a, b) => a.date - b.date);
-          const n = ordered.length;
-          const k = Math.min(3, Math.floor(n / 2));
-          if (k < 1) continue;
 
-          const baseline = median(ordered.slice(0, k).map(p => p.e1rm));
-          const current  = median(ordered.slice(n - k).map(p => p.e1rm));
-          const denom = Math.max(baseline, 1e-6);
-          const improvementPct = ((current - baseline) / denom) * 100;
-          if (!Number.isFinite(improvementPct)) continue;
+        for (const [exerciseId, { name, items }] of byExercise.entries()) {
+          if (items.length === 0) continue;
 
-          entries.push({ exerciseId, name, baseline, current, improvementPct });
+          // Agrupamos por día y elegimos el mejor set de cada día
+          const grouped = groupSetsByDay(items);
+          const days = Array.from(grouped.keys()).sort(); // YYYY-MM-DD ascendente
+          if (days.length < 2) continue; // necesitamos al menos 2 días distintos
+
+          const firstDay = days[0];
+          const lastDay = days[days.length - 1];
+
+          const bestFirst = bestSetPerDay(grouped.get(firstDay)!);
+          const bestLast = bestSetPerDay(grouped.get(lastDay)!);
+          if (!bestFirst || !bestLast) continue;
+
+          const base = e1rmBrzycki(Number(bestFirst.weight), Number(bestFirst.reps));
+          const curr = e1rmBrzycki(Number(bestLast.weight), Number(bestLast.reps));
+          if (!(isFiniteNum(base) && isFiniteNum(curr))) continue;
+
+          const denom = Math.max(Number(base), 1e-6);
+          const improvementPct = ((Number(curr) - Number(base)) / denom) * 100;
+
+          entries.push({
+            exerciseId,
+            name,
+            baseline: Number(base),
+            current: Number(curr),
+            improvementPct,
+          });
         }
 
+        // Top-5 por % mejora (desc) y luego invertimos para que Top1 quede a la derecha
         entries.sort((a, b) => b.improvementPct - a.improvementPct);
-        setTop(entries.slice(0, 5));
+        const top5 = entries.slice(0, 5).reverse();
+
+        setTop(top5);
       } catch (e) {
         console.error('[TopRMImprovementChart] load error', e);
         setTop([]);
@@ -143,6 +217,7 @@ export default function TopRMImprovementChart() {
     })();
   }, []);
 
+  // Datos del chart
   const chartData = useMemo(() => {
     return top.map((t, i) => ({
       key: t.exerciseId,
@@ -154,9 +229,7 @@ export default function TopRMImprovementChart() {
     }));
   }, [top]);
 
-  const xLabels = chartData.map(d => d.label);
-  const yMin = Math.min(0, ...chartData.map(d => d.value));
-  const yMax = Math.max(0, ...chartData.map(d => d.value));
+  const xLabels = chartData.map((d) => d.label);
 
   return (
     <View style={styles.container}>
@@ -170,29 +243,17 @@ export default function TopRMImprovementChart() {
             style={styles.chart}
             data={chartData as any}
             yAccessor={({ item }) => item.value}
-            svg={{}}
+            svg={{}} // cada item aporta su fill con url(#grad_i)
             spacingInner={0.3}
             contentInset={{ top: 16, bottom: 16 }}
-            yMin={yMin}
-            yMax={yMax}
-            extras={[
-              ({}) => (
-                <Gradients
-                  ids={chartData.map(d => d.gradientId)}
-                  baseColors={chartData.map(d => d.baseColor)}
-                />
-              ),
-              ({ x, y, bandwidth, data }) => (
-                <Labels
-                  x={x as any}
-                  y={y as any}
-                  bandwidth={bandwidth as any}
-                  data={(data as any[]).map((it) => ({ value: it.value as number }))}
-                />
-              ),
-            ]}
           >
+            <Gradients
+              ids={chartData.map((d) => d.gradientId)}
+              baseColors={chartData.map((d) => d.baseColor)}
+            />
             <Grid />
+            {/* BarChart clona a sus hijos inyectando x, y, bandwidth, data */}
+            <Labels />
           </BarChart>
 
           <XAxis
