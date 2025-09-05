@@ -294,8 +294,8 @@ export default function Dashboard() {
         </Card>
 
         {/* NUEVO: Nutrition (últimos 7 días) */}
-        <Card variant="dark" style={styles.chartCard}>
-          <NutritionWeeklyBarChart height={220} title="Weekly Intake" />
+        <Card variant="dark" style={styles.nutritionCard}>
+          <NutritionWeeklyBarChart height={220} title="Weekly Macros Record" />
         </Card>
 
         {/* Modal selector */}
@@ -356,6 +356,7 @@ const styles = StyleSheet.create({
   pageInner: { width: '90%', alignSelf: 'center' },
 
   chartCard: { padding: 16, backgroundColor: '#191B1F' },
+  nutritionCard: { marginTop: 20, backgroundColor: '#191B1F'},
 
   cardTitle: {
     color: '#fff',

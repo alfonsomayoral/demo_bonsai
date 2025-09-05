@@ -181,14 +181,14 @@ export default function NutritionWeeklyBarChart({
       labelColor: (opacity = 1) => rgba('#D1D5DB', opacity),
       fillShadowGradientFrom: color,
       fillShadowGradientTo: color,
-      fillShadowGradientOpacity: 0.7,
+      fillShadowGradientOpacity: 0.8,
       barPercentage: 0.5,
       propsForBackgroundLines: {
         stroke: 'rgba(148, 163, 184, 0.25)',
         strokeDasharray: '4 6',
       },
       propsForLabels: {
-        fontSize: 12,
+        fontSize: 10,
       },
     }),
     [color]
@@ -232,7 +232,7 @@ export default function NutritionWeeklyBarChart({
           chartConfig={chartConfig as any}
           fromZero
           withInnerLines
-          showBarTops={false}
+          showBarTops
           withCustomBarColorFromData={false}
         />
       )}
