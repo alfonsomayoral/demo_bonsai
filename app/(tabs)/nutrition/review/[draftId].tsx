@@ -69,9 +69,19 @@ export default function MealReviewScreen() {
   const healthScore = hasDraft ? (draft as FoodAnalysisResult).healthScore : undefined;
   const baseItems   = hasDraft ? (draft as FoodAnalysisResult).items : [];
 
-  // Inicializar "edited" con los items del draft
+  // Inicializar "edited" con los items del draft (normalizando kcal/calories y redondeando)
   useEffect(() => {
-    setEdited(baseItems.map((it) => ({ ...it })));
+    // Normalizamos 'kcal' por si el modelo entregó 'calories'
+    setEdited(
+      baseItems.map((it: any) => ({
+        ...it,
+        kcal: Math.round(Number((it as any)?.kcal ?? (it as any)?.calories ?? 0)),
+        protein: Math.round(Number(it?.protein ?? 0)),
+        carbs: Math.round(Number(it?.carbs ?? 0)),
+        fat: Math.round(Number(it?.fat ?? 0)),
+        weight_g: Math.round(Number(it?.weight_g ?? 0)),
+      }))
+    );
   }, [baseItems]);
 
   // Firmar URL del banner
@@ -150,7 +160,7 @@ export default function MealReviewScreen() {
     }
   };
 
-  // UI helpers
+  // UI helpers (sin tocar diseño)
   const MacroCard = ({
     icon,
     label,
@@ -227,26 +237,26 @@ export default function MealReviewScreen() {
     setWPVis(true);
   };
 
-  // Confirmar valor de gramos desde WeightPad
+  // Confirmar valor de gramos desde WeightPad (reescalado usando el item previo ya normalizado)
   const onWeightPadConfirm = (grams: number) => {
     if (editingIdx === null) return;
 
     setEdited((prev) => {
       const next = [...prev];
-      const base = baseItems[editingIdx]; // referencia original del modelo
-      if (!base || base.weight_g <= 0) {
+      const prevItem = next[editingIdx];
+      if (!prevItem || prevItem.weight_g <= 0) {
         next[editingIdx] = { ...next[editingIdx], weight_g: grams };
         return next;
       }
-      const factor = grams / base.weight_g;
+      const factor = grams / prevItem.weight_g;
 
       next[editingIdx] = {
         ...next[editingIdx],
         weight_g: grams,
-        kcal:    Math.max(0, Math.round((base.kcal    ?? 0) * factor)),
-        protein: Math.max(0, Math.round((base.protein ?? 0) * factor)),
-        carbs:   Math.max(0, Math.round((base.carbs   ?? 0) * factor)),
-        fat:     Math.max(0, Math.round((base.fat     ?? 0) * factor)),
+        kcal:    Math.max(0, Math.round((prevItem.kcal    ?? 0) * factor)),
+        protein: Math.max(0, Math.round((prevItem.protein ?? 0) * factor)),
+        carbs:   Math.max(0, Math.round((prevItem.carbs   ?? 0) * factor)),
+        fat:     Math.max(0, Math.round((prevItem.fat     ?? 0) * factor)),
       };
       return next;
     });

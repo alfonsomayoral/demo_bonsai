@@ -1,5 +1,5 @@
 // components/charts/NutritionWeeklyBarChart.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   LayoutChangeEvent,
 } from 'react-native';
 import { BarChart } from 'react-native-chart-kit';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 
 type MealRow = {
@@ -34,6 +35,13 @@ const METRICS: Readonly<
   protein:  { label: 'Protein',  field: 'total_protein', color: '#EF4444', suffix: 'g'    }, // rojo
   carbs:    { label: 'Carbs',    field: 'total_carbs',   color: '#EAB308', suffix: 'g'    }, // amarillo
   fats:     { label: 'Fats',     field: 'total_fat',     color: '#F97316', suffix: 'g'    }, // naranja
+};
+
+const ICONS: Readonly<Record<MetricKey, string>> = {
+  calories: 'fire-circle',
+  protein: 'food-drumstick',
+  carbs: 'rice',
+  fats: 'cheese',
 };
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -94,24 +102,19 @@ export default function NutritionWeeklyBarChart({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dataMap, setDataMap] = useState<Record<string, MealRow[]>>({}); // ymd -> meals[]
   const [containerW, setContainerW] = useState<number>(Math.min(SCREEN_W - 40, 360));
+  const [userId, setUserId] = useState<string | null>(null);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
     if (w && Math.abs(w - containerW) > 1) setContainerW(w);
   };
 
-  // cargar datos 7 días
-  useEffect(() => {
-    (async () => {
+  /** Cargar datos (reutilizable). showSpinner controla si mostramos el loader o refrescamos en segundo plano */
+  const loadData = useCallback(
+    async (showSpinner = false) => {
+      if (!userId) return;
       try {
-        setLoading(true);
-        const { data: userRes } = await supabase.auth.getUser();
-        const userId = userRes?.user?.id;
-        if (!userId) {
-          setDataMap({});
-          setLoading(false);
-          return;
-        }
+        if (showSpinner) setLoading(true);
 
         const days = last7Days();
         const start = new Date(days[0].getFullYear(), days[0].getMonth(), days[0].getDate(), 0, 0, 0, 0);
@@ -138,10 +141,61 @@ export default function NutritionWeeklyBarChart({
         console.error('[NutritionWeeklyBarChart] load error', e);
         setDataMap({});
       } finally {
+        if (showSpinner) setLoading(false);
+      }
+    },
+    [userId]
+  );
+
+  /** Resolver userId y carga inicial */
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: userRes } = await supabase.auth.getUser();
+        const uid = userRes?.user?.id ?? null;
+        setUserId(uid);
+        if (uid) {
+          await loadData(true);
+        } else {
+          setDataMap({});
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error('[NutritionWeeklyBarChart] auth error', e);
+        setUserId(null);
+        setDataMap({});
         setLoading(false);
       }
     })();
-  }, []);
+  }, [loadData]);
+
+  /** Suscripción en tiempo real a meals del usuario */
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel('realtime:meals_weekly')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'meals', filter: `user_id=eq.${userId}` },
+        () => loadData(false)
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'meals', filter: `user_id=eq.${userId}` },
+        () => loadData(false)
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'meals', filter: `user_id=eq.${userId}` },
+        () => loadData(false)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, loadData]);
 
   // construir labels (7 días) y valores según métrica
   const { labels, values, color, suffix } = useMemo(() => {
@@ -159,7 +213,6 @@ export default function NutritionWeeklyBarChart({
         const v = Number(r[metricInfo.field] ?? 0);
         if (Number.isFinite(v)) sum += v;
       }
-      // etiqueta: “Today” para el último
       labs.push(i === days.length - 1 ? 'Today' : shortDM(d));
       vals.push(Math.round(sum));
     }
@@ -207,13 +260,28 @@ export default function NutritionWeeklyBarChart({
     setPickerOpen(false);
   };
 
+  const currentIcon = ICONS[metric];
+  const currentColor = color;
+
   return (
     <View style={styles.container} onLayout={onLayout}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
-        <TouchableOpacity style={styles.metricBtn} onPress={() => setPickerOpen(true)}>
-          <Text style={styles.metricBtnText}>{METRICS[metric].label}</Text>
+
+        <TouchableOpacity
+          style={[styles.metricBtn, { borderColor: currentColor }]}
+          onPress={() => setPickerOpen(true)}
+        >
+          <View style={styles.metricBtnInner}>
+            <MaterialCommunityIcons
+              name={currentIcon as any}
+              size={16}
+              color={currentColor}
+              style={styles.metricIcon}
+            />
+            <Text style={styles.metricBtnText}>{METRICS[metric].label}</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -227,7 +295,7 @@ export default function NutritionWeeklyBarChart({
           data={data}
           width={containerW}
           height={height}
-          yAxisLabel=""                 // ← requerido por tus typings
+          yAxisLabel=""
           yAxisSuffix={` ${suffix}`}
           chartConfig={chartConfig as any}
           fromZero
@@ -289,7 +357,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  metricBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metricIcon: {
+    marginRight: 6,
   },
   metricBtnText: { color: '#D1D5DB', fontFamily: 'Inter-SemiBold' },
 
