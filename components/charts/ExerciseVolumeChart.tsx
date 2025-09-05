@@ -166,7 +166,7 @@ export default function ExerciseVolumeChart({
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#191B1F', borderRadius: 12, padding: 16 },
+  card: { backgroundColor: '#191B1F', borderRadius: 12, padding: 10 },
 
   headerRow: {
     flexDirection: 'row',

@@ -20,6 +20,7 @@ import ExerciseVolumeChart from '@/components/charts/ExerciseVolumeChart';
 import BrzyckiRMChart from '@/components/charts/BrzyckiRMChart';
 import MuscleGroupPieChart from '@/components/charts/MuscleGroupPieChart';
 import TopRMImprovementChart from '@/components/charts/TopRMImprovementChart';
+import colors from '@/theme/colors';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -47,7 +48,7 @@ export default function Dashboard() {
   const [dataPoints, setDataPoints] = useState<{ date: Date; value: number }[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Pager (igual patrón que [exerciseId]), ahora con 3 páginas
+  // Pager (3 páginas)
   const [viewportW, setViewportW] = useState<number>(SCREEN_W);
   const [page, setPage] = useState<number>(0);
   const pagerRef = useRef<ScrollView | null>(null);
@@ -68,7 +69,7 @@ export default function Dashboard() {
     });
   };
 
-  // 1RM del ejercicio seleccionado (para la segunda página)
+  // 1RM del ejercicio seleccionado (página 2)
   const [rm1, setRm1] = useState<number | null>(null);
 
   // Carga lista de ejercicios
@@ -201,7 +202,6 @@ export default function Dashboard() {
   const buttonLabel = loading ? 'Loading…' : selected?.name ?? 'Select exercise';
   const buttonDisabled = loading || exercises.length === 0;
 
-  // Selección desde el modal → fija ejercicio y navega a página Brzycki
   const handlePickExercise = (item: ExerciseRow) => {
     setSelected(item);
     setPickerOpen(false);
@@ -217,7 +217,7 @@ export default function Dashboard() {
         </View>
 
         {/* Carrusel de charts (3 páginas) */}
-        <View style={{ marginTop: 8 }}>
+        <View style={styles.carouselSection}>
           <View onLayout={onPagerLayout}>
             <ScrollView
               ref={pagerRef}
@@ -234,7 +234,6 @@ export default function Dashboard() {
                 <View style={styles.pageInner}>
                   <Card variant="dark" style={styles.chartCard}>
                     <ExerciseVolumeChart
-                      // título fijo interno: "Volume Progress"
                       data={dataPoints}
                       height={220}
                       actionLabel={buttonLabel}
@@ -251,7 +250,6 @@ export default function Dashboard() {
                   <Card variant="dark" style={styles.chartCard}>
                     {rm1 ? (
                       <BrzyckiRMChart
-                        // título fijo interno: "RM Prediction"
                         rm1={rm1}
                         actionLabel={buttonLabel}
                         onPressAction={() => setPickerOpen(true)}
@@ -279,7 +277,20 @@ export default function Dashboard() {
               </View>
             </ScrollView>
           </View>
+
+          {/* Dots (indicador de página) */}
+          <View style={styles.dotsRow}>
+            <View style={[styles.dot, page === 0 ? styles.dotActive : styles.dotInactive]} />
+            <View style={[styles.dot, page === 1 ? styles.dotActive : styles.dotInactive]} />
+            <View style={[styles.dot, page === 2 ? styles.dotActive : styles.dotInactive]} />
+          </View>
         </View>
+
+        {/* Pie Chart por grupos musculares (últimos 30 días) */}
+        <Card variant="dark" style={styles.chartCard}>
+          <Text style={styles.cardTitle}>Muscle Focus (last 30 days)</Text>
+          <MuscleGroupPieChart />
+        </Card>
 
         {/* Modal selector */}
         <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
@@ -310,12 +321,6 @@ export default function Dashboard() {
             </View>
           </View>
         </Modal>
-
-        {/* Pie Chart por grupos musculares (últimos 30 días) */}
-        <Card variant="dark" style={styles.chartCard}>
-          <Text style={styles.cardTitle}>Muscle Focus (last 30 days)</Text>
-          <MuscleGroupPieChart />
-        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -334,9 +339,15 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 28, color: '#fff', fontFamily: 'Inter-Bold' },
 
-  // Páginas: mismo formato que [exerciseId]
+  // Sección carrusel + dots (añadimos margen inferior extra)
+  carouselSection: {
+    marginTop: 8,
+    marginBottom: 24, // ← más aire para que no se solape con el siguiente card
+  },
+
+  // Páginas
   page: { justifyContent: 'center', alignItems: 'center' },
-  pageInner: { width: '90%', alignSelf: 'center' }, // sin tocar bordes ni ver cards vecinos
+  pageInner: { width: '90%', alignSelf: 'center' },
 
   chartCard: { padding: 16, backgroundColor: '#191B1F' },
 
@@ -345,6 +356,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     marginBottom: 8,
+  },
+
+  // Dots
+  dotsRow: {
+    marginTop: 12,
+    marginBottom: 8, // un pelín de espacio bajo los dots
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  dotActive: {
+    backgroundColor: colors.primary, // verde
+  },
+  dotInactive: {
+    backgroundColor: '#374151', // gris
   },
 
   // Placeholder RM

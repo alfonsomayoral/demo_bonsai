@@ -102,7 +102,7 @@ export default function BrzyckiRMChart({
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#191B1F', borderRadius: 12, padding: 16 },
+  card: { backgroundColor: '#191B1F', borderRadius: 12, padding: 10 },
 
   headerRow: {
     flexDirection: 'row',
@@ -127,5 +127,5 @@ const styles = StyleSheet.create({
 
   chartBox: { width: '100%' },
   chart: { borderRadius: 12 },
-  rmText: { marginTop: 10, color: '#22c55e', fontSize: 16, fontWeight: '700' },
+  rmText: { marginTop: 10, color: '#22c55e', fontSize: 16, fontWeight: '800' },
 });

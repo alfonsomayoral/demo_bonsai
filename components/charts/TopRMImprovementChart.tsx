@@ -271,6 +271,6 @@ export default function TopRMImprovementChart() {
 
 const styles = StyleSheet.create({
   container: { width: '100%' },
-  chart: { height: 240 },
+  chart: { height: 270 },
   empty: { color: '#9CA3AF', fontSize: 13, textAlign: 'center', paddingVertical: 8 },
 });
