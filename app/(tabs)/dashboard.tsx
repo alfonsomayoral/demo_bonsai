@@ -20,6 +20,7 @@ import ExerciseVolumeChart from '@/components/charts/ExerciseVolumeChart';
 import BrzyckiRMChart from '@/components/charts/BrzyckiRMChart';
 import MuscleGroupPieChart from '@/components/charts/MuscleGroupPieChart';
 import TopRMImprovementChart from '@/components/charts/TopRMImprovementChart';
+import NutritionWeeklyBarChart from '@/components/charts/NutritionWeeklyBarChart'; // ← NUEVO
 import colors from '@/theme/colors';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -292,6 +293,11 @@ export default function Dashboard() {
           <MuscleGroupPieChart />
         </Card>
 
+        {/* NUEVO: Nutrition (últimos 7 días) */}
+        <Card variant="dark" style={styles.chartCard}>
+          <NutritionWeeklyBarChart height={220} title="Weekly Intake" />
+        </Card>
+
         {/* Modal selector */}
         <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
           <View style={styles.modalOverlay}>
@@ -342,7 +348,7 @@ const styles = StyleSheet.create({
   // Sección carrusel + dots (añadimos margen inferior extra)
   carouselSection: {
     marginTop: 8,
-    marginBottom: 24, // ← más aire para que no se solape con el siguiente card
+    marginBottom: 24,
   },
 
   // Páginas
@@ -361,7 +367,7 @@ const styles = StyleSheet.create({
   // Dots
   dotsRow: {
     marginTop: 12,
-    marginBottom: 8, // un pelín de espacio bajo los dots
+    marginBottom: 8,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
@@ -372,10 +378,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   dotActive: {
-    backgroundColor: colors.primary, // verde
+    backgroundColor: colors.primary,
   },
   dotInactive: {
-    backgroundColor: '#374151', // gris
+    backgroundColor: '#374151',
   },
 
   // Placeholder RM
