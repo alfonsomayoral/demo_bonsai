@@ -14,6 +14,7 @@ import {
 import { BarChart } from 'react-native-chart-kit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { useMealsToday } from '@/hooks/useMealsToday';
 
 type MealRow = {
   logged_at: string;
@@ -104,12 +105,15 @@ export default function NutritionWeeklyBarChart({
   const [containerW, setContainerW] = useState<number>(Math.min(SCREEN_W - 40, 360));
   const [userId, setUserId] = useState<string | null>(null);
 
+  // Totales "vivos" del día (mismo origen que nutrition/index)
+  const { totals: todayTotals } = useMealsToday();  // ← usa el mismo hook de la pantalla principal (realtime). :contentReference[oaicite:1]{index=1}
+
   const onLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
     if (w && Math.abs(w - containerW) > 1) setContainerW(w);
   };
 
-  /** Cargar datos (reutilizable). showSpinner controla si mostramos el loader o refrescamos en segundo plano */
+  /** Cargar datos 7 días (histórico) */
   const loadData = useCallback(
     async (showSpinner = false) => {
       if (!userId) return;
@@ -169,35 +173,10 @@ export default function NutritionWeeklyBarChart({
     })();
   }, [loadData]);
 
-  /** Suscripción en tiempo real a meals del usuario */
-  useEffect(() => {
-    if (!userId) return;
-
-    const channel = supabase
-      .channel('realtime:meals_weekly')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'meals', filter: `user_id=eq.${userId}` },
-        () => loadData(false)
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'meals', filter: `user_id=eq.${userId}` },
-        () => loadData(false)
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'meals', filter: `user_id=eq.${userId}` },
-        () => loadData(false)
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId, loadData]);
-
-  // construir labels (7 días) y valores según métrica
+  /** Labels + valores por métrica
+   *  Importante: la barra de "Today" se SOBREESCRIBE con `useMealsToday` (realtime),
+   *  igual que tus ProgressRings en nutrition/index. :contentReference[oaicite:2]{index=2}
+   */
   const { labels, values, color, suffix } = useMemo(() => {
     const days = last7Days();
     const metricInfo = METRICS[metric];
@@ -213,7 +192,24 @@ export default function NutritionWeeklyBarChart({
         const v = Number(r[metricInfo.field] ?? 0);
         if (Number.isFinite(v)) sum += v;
       }
-      labs.push(i === days.length - 1 ? 'Today' : shortDM(d));
+
+      // Label
+      const isToday = i === days.length - 1;
+      labs.push(isToday ? 'Today' : shortDM(d));
+
+      // Si es HOY, sobreescribimos con los totales del hook (realtime)
+      if (isToday) {
+        const live =
+          metric === 'calories'
+            ? todayTotals.calories
+            : metric === 'protein'
+            ? todayTotals.protein
+            : metric === 'carbs'
+            ? todayTotals.carbs
+            : todayTotals.fat; // 'fats' -> 'fat'
+        sum = Math.round(Number(live ?? 0));
+      }
+
       vals.push(Math.round(sum));
     }
 
@@ -223,7 +219,7 @@ export default function NutritionWeeklyBarChart({
       color: metricInfo.color,
       suffix: metricInfo.suffix,
     };
-  }, [dataMap, metric]);
+  }, [dataMap, metric, todayTotals]);
 
   const chartConfig = useMemo(
     () => ({
